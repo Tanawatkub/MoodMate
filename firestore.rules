@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ตรวจว่า mood เป็นค่าที่กำหนดในเอกสารกลาง
+    function validMood(m) {
+      return m in ['happy', 'angry', 'sad', 'neutral'];
+    }
+
+    // ตรวจว่า context tags ทุกตัวอยู่ในรายการกลาง
+    function validTags(tags) {
+      return tags is list
+        && tags.hasOnly(['Coding', 'Lab', 'Project', 'Group Work',
+                         'Presentation', 'Deadline', 'Personal']);
+    }
+
+    // ตรวจรูปแบบข้อมูลของ mood entry
+    function validEntry(data, uid) {
+      return data.keys().hasOnly(
+               ['userId', 'mood', 'contextTags', 'diaryText',
+                'createdAt', 'updatedAt'])
+        && data.userId == uid
+        && validMood(data.mood)
+        && validTags(data.contextTags)
+        && data.diaryText is string
+        && data.diaryText.size() <= 5000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId}/mood_entries/{entryId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && validEntry(request.resource.data, userId);
+
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && validEntry(request.resource.data, userId)
+                    && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
+    }
+
+    // ปฏิเสธทุกอย่างที่ไม่ได้ระบุไว้
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
