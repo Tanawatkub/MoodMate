@@ -15,16 +15,15 @@ class MockDiaryRepository implements DiaryRepository {
   /// [now] ใช้กำหนดเวลาปัจจุบันตอนทดสอบ (ค่าเริ่มต้นคือ DateTime.now)
   MockDiaryRepository({
     String? sampleUserId,
-    Duration latency = Duration.zero,
+    this.latency = Duration.zero,
     DateTime Function()? now,
-  })  : _latency = latency,
-        _now = now ?? DateTime.now {
+  }) : _now = now ?? DateTime.now {
     if (sampleUserId != null) {
       seedSamples(sampleUserId);
     }
   }
 
-  final Duration _latency;
+  final Duration latency;
   final DateTime Function() _now;
   final List<MoodEntry> _entries = [];
   int _nextId = 1;
@@ -32,8 +31,8 @@ class MockDiaryRepository implements DiaryRepository {
   String _newId() => 'mock-${_nextId++}';
 
   Future<void> _wait() async {
-    if (_latency > Duration.zero) {
-      await Future<void>.delayed(_latency);
+    if (latency > Duration.zero) {
+      await Future<void>.delayed(latency);
     }
   }
 
