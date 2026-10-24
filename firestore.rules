@@ -24,7 +24,7 @@ service cloud.firestore {
         && validMood(data.mood)
         && validTags(data.contextTags)
         && data.diaryText is string
-        && data.diaryText.size() <= 5000
+        && data.diaryText.size() <= 20000
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
