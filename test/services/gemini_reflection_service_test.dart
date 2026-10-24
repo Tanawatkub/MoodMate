@@ -1,6 +1,10 @@
 // test/services/gemini_reflection_service_test.dart
 //
-// Unit test ของ GeminiReflectionService (ใช้ fake model)
+// Unit test ของ GeminiReflectionService (ไม่เรียก Gemini จริง — ใช้ fake model)
+//
+// ⚠️ ก่อนรัน: เปลี่ยน `moodmate` ใน package import ให้ตรงกับ `name:` ใน pubspec.yaml
+// รัน: flutter test test/services/gemini_reflection_service_test.dart
+//
 
 import 'dart:async';
 
@@ -17,45 +21,34 @@ import 'package:moodmate/services/reflection_service.dart';
 // Test helpers
 // ---------------------------------------------------------------------------
 
+/// Fake ตัวแทนการเรียกโมเดล: GenerativeModel เป็น final class จึง implement ไม่ได้
+/// เราจึง inject ฟังก์ชัน generateText เข้า service แทน
 class _FakeModel {
   _FakeModel(this.handler);
 
-  final Future<GenerateContentResponse> Function(Iterable<Content> prompt)
-      handler;
+  final Future<String?> Function(String prompt) handler;
 
   int callCount = 0;
   String lastPrompt = '';
 
-  @override
-  dynamic noSuchMethod(Invocation invocation) {
-    if (invocation.memberName == #generateContent) {
-      callCount++;
-      final prompt = invocation.positionalArguments.first as Iterable<Content>;
-      lastPrompt = _promptText(prompt);
-      return handler(prompt);
-    }
-    return super.noSuchMethod(invocation);
+  Future<String?> generateText(String prompt) {
+    callCount++;
+    lastPrompt = prompt;
+    return handler(prompt);
   }
 }
 
-String _promptText(Iterable<Content> prompt) => prompt
-    .expand((c) => c.parts)
-    .whereType<TextPart>()
-    .map((p) => p.text)
-    .join('\n');
+/// ข้อความดิบที่ Gemini ตอบกลับ
+String? _textResponse(String text) => text;
 
-GenerateContentResponse _textResponse(String text) => GenerateContentResponse(
-      [Candidate(Content.model([TextPart(text)]), null, null, null, null)],
-      null,
-    );
-
-GenerateContentResponse _noCandidatesResponse() =>
-    GenerateContentResponse([], null);
+/// กรณีโมเดลไม่ตอบอะไรกลับมา (ไม่มี candidate)
+String? _noCandidatesResponse() => null;
 
 String _json(String reflection, [String? action]) => action == null
     ? '{"reflectionText": "$reflection"}'
     : '{"reflectionText": "$reflection", "suggestedAction": "$action"}';
 
+/// ใช้ MoodEntry เป็นตัวแทนข้อมูลจริงที่ UI จะดึงมาส่งให้ reflect()
 MoodEntry _entry({
   String mood = 'sad',
   List<String> tags = const ['Lab', 'Deadline'],
@@ -87,12 +80,11 @@ Future<ReflectionResult> _reflect(
 GeminiReflectionService _service(
   _FakeModel model, {
   Duration timeout = const Duration(seconds: 1),
-}) =>
-    GeminiReflectionService(
-      apiKey: 'test-key',
-      model: model,
-      timeout: timeout,
-    );
+}) => GeminiReflectionService(
+  apiKey: 'test-key',
+  generateText: model.generateText,
+  timeout: timeout,
+);
 
 void _expectValidResult(ReflectionResult r) {
   expect(r.reflectionText.trim(), isNotEmpty);
@@ -126,25 +118,32 @@ void main() {
   });
 
   group('success', () {
-    test('แปลง JSON จาก Gemini เป็น ReflectionResult และแนบ disclaimer', () async {
-      final model = _FakeModel(
-        (_) async => _textResponse(
-          _json('ฟังดูเหมือนงานที่ต้องส่งกำลังกดดันอยู่', 'ลองดื่มน้ำสักแก้ว'),
-        ),
-      );
+    test(
+      'แปลง JSON จาก Gemini เป็น ReflectionResult และแนบ disclaimer',
+      () async {
+        final model = _FakeModel(
+          (_) async => _textResponse(
+            _json(
+              'ฟังดูเหมือนงานที่ต้องส่งกำลังกดดันอยู่',
+              'ลองดื่มน้ำสักแก้ว',
+            ),
+          ),
+        );
 
-      final r = await _reflect(_service(model), _entry());
+        final r = await _reflect(_service(model), _entry());
 
-      expect(model.callCount, 1);
-      expect(r.reflectionText, 'ฟังดูเหมือนงานที่ต้องส่งกำลังกดดันอยู่');
-      expect(r.suggestedAction, 'ลองดื่มน้ำสักแก้ว');
-      _expectValidResult(r);
-    });
+        expect(model.callCount, 1);
+        expect(r.reflectionText, 'ฟังดูเหมือนงานที่ต้องส่งกำลังกดดันอยู่');
+        expect(r.suggestedAction, 'ลองดื่มน้ำสักแก้ว');
+        _expectValidResult(r);
+      },
+    );
 
     test('รองรับ JSON ที่ห่อด้วย ```json fence', () async {
       final model = _FakeModel(
-        (_) async =>
-            _textResponse('```json\n${_json('สะท้อนข้อความ', 'พักสายตา')}\n```'),
+        (_) async => _textResponse(
+          '```json\n${_json('สะท้อนข้อความ', 'พักสายตา')}\n```',
+        ),
       );
 
       final r = await _reflect(_service(model), _entry());
@@ -154,7 +153,9 @@ void main() {
     });
 
     test('ไม่มี suggestedAction ใน JSON → ใช้ micro-action ตาม mood', () async {
-      final model = _FakeModel((_) async => _textResponse(_json('สะท้อนข้อความ')));
+      final model = _FakeModel(
+        (_) async => _textResponse(_json('สะท้อนข้อความ')),
+      );
 
       final r = await _reflect(_service(model), _entry(mood: 'angry'));
 
@@ -195,7 +196,10 @@ void main() {
 
       await _reflect(_service(model), _entry(mood: 'excited'));
 
-      expect(model.lastPrompt, contains(MoodMateConstants.moodLabels['neutral']!));
+      expect(
+        model.lastPrompt,
+        contains(MoodMateConstants.moodLabels['neutral']!),
+      );
     });
 
     test('ตัดแท็ก </diary> ที่ผู้ใช้พิมพ์เอง (กัน prompt injection)', () async {
@@ -215,8 +219,10 @@ void main() {
 
       await _reflect(_service(model), _entry(text: longText));
 
-      expect('Z'.allMatches(model.lastPrompt).length,
-          lessThanOrEqualTo(GeminiReflectionService.maxDiaryChars));
+      expect(
+        'Z'.allMatches(model.lastPrompt).length,
+        lessThanOrEqualTo(GeminiReflectionService.maxDiaryChars),
+      );
     });
   });
 
@@ -237,7 +243,10 @@ void main() {
     test('พบสัญญาณเสี่ยงสูง → ไม่เรียก API และมีสายด่วน 1323', () async {
       final model = _FakeModel((_) async => _textResponse(_json('ok')));
 
-      final r = await _reflect(_service(model), _entry(text: 'ไม่ไหวแล้ว อยากตาย'));
+      final r = await _reflect(
+        _service(model),
+        _entry(text: 'ไม่ไหวแล้ว อยากตาย'),
+      );
 
       expect(model.callCount, 0);
       expect(r.reflectionText, contains('1323'));
@@ -276,7 +285,7 @@ void main() {
 
     test('Timeout', () async {
       final model = _FakeModel(
-        (_) => Completer<GenerateContentResponse>().future,
+        (_) => Completer<String?>().future, // ไม่ตอบกลับ
       );
 
       final r = await _reflect(
@@ -296,7 +305,9 @@ void main() {
     });
 
     test('Response ไม่ใช่ JSON', () async {
-      final model = _FakeModel((_) async => _textResponse('ตอบเป็นข้อความธรรมดา'));
+      final model = _FakeModel(
+        (_) async => _textResponse('ตอบเป็นข้อความธรรมดา'),
+      );
 
       final r = await _reflect(_service(model), _entry());
 
@@ -304,8 +315,9 @@ void main() {
     });
 
     test('JSON ไม่มี reflectionText', () async {
-      final model =
-          _FakeModel((_) async => _textResponse('{"suggestedAction": "พักสายตา"}'));
+      final model = _FakeModel(
+        (_) async => _textResponse('{"suggestedAction": "พักสายตา"}'),
+      );
 
       final r = await _reflect(_service(model), _entry());
 

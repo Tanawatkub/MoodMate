@@ -50,3 +50,5 @@ app.*.map.json
 *.env
 !.env.example
 **/service-account*.json
+test_direct.dart
+test_real_api.dart
