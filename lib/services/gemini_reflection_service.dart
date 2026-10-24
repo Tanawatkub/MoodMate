@@ -5,20 +5,9 @@
 // หน้าที่: implement ReflectionService ด้วย Gemini API (package: google_generative_ai)
 // - รับ diaryText / mood / contextTags แล้วคืน ReflectionResult ตาม contract กลาง
 // - System Prompt ภาษาไทย อิงหลัก Person-Centered Therapy + Empathic Reflection
-// - มี Fallback (Mock Response) เมื่อ API ล่ม / Timeout / Offline / format ผิด / ถูกบล็อก
+// - Fallback ทั้งหมด (API ล่ม / Timeout / Offline / format ผิด / ถูกบล็อก /
+//   บันทึกว่าง / สัญญาณเสี่ยงสูง) มอบให้ MockReflectionService ที่เดียว
 // - ไม่ log diary text, ไม่ log API key, ไม่ส่งข้อมูลระบุตัวตนไป Gemini
-//
-// ข้อสมมติ (ตรวจกับ lib/models/reflection_result.dart ก่อน merge):
-//   class ReflectionResult {
-//     const ReflectionResult({
-//       required this.reflectionText,
-//       this.suggestedAction,
-//       this.disclaimer,
-//     });
-//     final String reflectionText;
-//     final String? suggestedAction;
-//     final String? disclaimer;
-//   }
 
 import 'dart:async';
 import 'dart:convert';
@@ -26,7 +15,9 @@ import 'dart:developer' as developer;
 
 import 'package:google_generative_ai/google_generative_ai.dart';
 
+import '../core/constants/moodmate_constants.dart';
 import '../models/reflection_result.dart';
+import 'mock_reflection_service.dart';
 import 'reflection_service.dart';
 
 class GeminiReflectionService implements ReflectionService {
@@ -34,29 +25,22 @@ class GeminiReflectionService implements ReflectionService {
     required String apiKey,
     String modelName = defaultModelName,
     Duration timeout = const Duration(seconds: 20),
-    GenerativeModel? model, // ใช้ inject ตอนเขียน unit test
+    dynamic model, // ใช้ inject ตัวแทน GenerativeModel ตอนเขียน unit test
   }) : _apiKey = apiKey,
        _modelName = modelName,
        _timeout = timeout,
        _model = model;
 
-  /// ⚠️ เอกสารโครงการยังไม่ได้ระบุชื่อ Gemini model — ทีมต้องยืนยันก่อนใช้จริง
-  /// เปลี่ยนได้ผ่าน constructor โดยไม่ต้องแก้ไฟล์นี้
   static const String defaultModelName = 'gemini-2.5-flash';
-
-  /// จำกัดความยาวบันทึกที่ส่งไป AI (ป้องกัน prompt ยาวเกิน / ค่าใช้จ่ายสูง)
   static const int maxDiaryChars = 4000;
-
-  /// Disclaimer แนบกับผลลัพธ์ทุกครั้ง (รวมกรณี fallback)
-  static const String disclaimerText =
-      'ข้อความนี้สร้างโดย AI เพื่อช่วยให้คุณทบทวนความรู้สึกของตัวเองเท่านั้น '
-      'ไม่ใช่การวินิจฉัยหรือคำแนะนำทางการแพทย์ หากรู้สึกไม่ไหวหรือกังวลเกี่ยวกับ'
-      'สุขภาพใจ ควรปรึกษานักจิตวิทยา แพทย์ หรือสายด่วนสุขภาพจิต 1323 (กรมสุขภาพจิต)';
+  static const String disclaimerText = MockReflectionService.disclaimerText;
 
   final String _apiKey;
   final String _modelName;
   final Duration _timeout;
-  GenerativeModel? _model;
+  dynamic _model;
+
+  final ReflectionService _fallback = const MockReflectionService();
 
   // ---------------------------------------------------------------------------
   // System Prompt
@@ -90,7 +74,7 @@ Positive Regard), เข้าใจจากมุมมองของผู�
 ''';
 
   // ---------------------------------------------------------------------------
-  // Public API (ตาม Contract กลาง)
+  // Public API
   // ---------------------------------------------------------------------------
   @override
   Future<ReflectionResult> reflect({
@@ -100,38 +84,37 @@ Positive Regard), เข้าใจจากมุมมองของผู�
   }) async {
     final text = diaryText.trim();
 
-    // 1) ไม่มีเนื้อหา → ไม่เรียก API
-    if (text.isEmpty) {
-      return _result(
-        reflectionText:
-            'ตอนนี้ยังไม่มีข้อความในบันทึก ถ้าพร้อมเมื่อไหร่ ลองเขียนสิ่งที่อยู่ในใจสั้น ๆ '
-            'สักประโยคก็ได้ แล้วค่อยกลับมาให้ MoodMate ช่วยสะท้อนอีกครั้งนะ',
-        suggestedAction: 'ลองหายใจเข้าลึก ๆ ช้า ๆ สักสองสามครั้งก่อนเริ่มเขียน',
+    final safeMood = MoodMateConstants.moods.contains(mood) ? mood : 'neutral';
+    final safeTags = contextTags
+        .where(MoodMateConstants.contextTags.contains)
+        .toList(growable: false);
+
+    if (text.isEmpty || MockReflectionService.containsCrisisSignal(text)) {
+      return _fallback.reflect(
+        diaryText: text,
+        mood: safeMood,
+        contextTags: safeTags,
       );
     }
 
-    // 2) Safety pre-check ฝั่งแอป (ไม่พึ่งโมเดลอย่างเดียวในกรณีเสี่ยงสูง)
-    if (_containsCrisisSignal(text)) {
-      return _crisisResult();
-    }
-
-    // 3) เรียก Gemini — ทุกความล้มเหลวจบที่ fallback
     try {
-      if (_apiKey.trim().isEmpty) {
+      if (_apiKey.trim().isEmpty && _model == null) {
         throw StateError('missing_api_key');
       }
 
       final prompt = _buildUserPrompt(
         diaryText: text,
-        mood: mood,
-        contextTags: contextTags,
+        mood: safeMood,
+        contextTags: safeTags,
       );
 
-      final response = await _getModel()
-          .generateContent([Content.text(prompt)])
-          .timeout(_timeout);
+      final modelInstance = _getModel();
+      final response =
+          await (modelInstance.generateContent([Content.text(prompt)])
+                  as Future<dynamic>)
+              .timeout(_timeout);
 
-      final raw = response.text;
+      final raw = response.text as String?;
       if (raw == null || raw.trim().isEmpty) {
         throw const FormatException('empty_response');
       }
@@ -143,36 +126,36 @@ Positive Regard), เข้าใจจากมุมมองของผู�
         throw const FormatException('unsafe_output');
       }
 
-      return _result(
+      return ReflectionResult(
         reflectionText: parsed.reflectionText,
-        suggestedAction: parsed.suggestedAction ?? _fallbackAction(mood),
+        suggestedAction:
+            parsed.suggestedAction ?? MockReflectionService.actionFor(safeMood),
+        disclaimer: disclaimerText,
       );
     } on TimeoutException {
       _logFailure('timeout');
     } on GenerativeAIException catch (e) {
-      // ครอบคลุม API key ผิด / quota / server error / ถูกบล็อก / region ไม่รองรับ
-      // ไม่ log e.message เพราะอาจมีเนื้อหาจาก prompt
       _logFailure('GenerativeAIException:${e.runtimeType}');
     } on FormatException catch (e) {
       _logFailure('format:${e.message}');
     } catch (e) {
-      // Offline / SocketException / ClientException / อื่น ๆ
       _logFailure(e.runtimeType.toString());
     }
 
-    return _fallbackResult(mood: mood, contextTags: contextTags);
+    return _fallback.reflect(
+      diaryText: text,
+      mood: safeMood,
+      contextTags: safeTags,
+    );
   }
 
-  // ---------------------------------------------------------------------------
-  // Gemini setup
-  // ---------------------------------------------------------------------------
-  GenerativeModel _getModel() {
+  dynamic _getModel() {
     return _model ??= GenerativeModel(
       model: _modelName,
       apiKey: _apiKey,
       systemInstruction: Content.system(systemPrompt),
       generationConfig: GenerationConfig(
-        temperature: 0.7, // อบอุ่นเป็นธรรมชาติ แต่ไม่สร้างสรรค์จนแต่งเรื่อง
+        temperature: 0.7,
         topP: 0.9,
         maxOutputTokens: 400,
         responseMimeType: 'application/json',
@@ -189,7 +172,6 @@ Positive Regard), เข้าใจจากมุมมองของผู�
     if (safeText.length > maxDiaryChars) {
       safeText = safeText.substring(0, maxDiaryChars);
     }
-    // กันผู้ใช้ปิดแท็ก <diary> เองเพื่อฉีดคำสั่ง
     safeText = safeText.replaceAll(
       RegExp(r'</?\s*diary\s*>', caseSensitive: false),
       '',
@@ -211,14 +193,10 @@ $safeText
 ''';
   }
 
-  // ---------------------------------------------------------------------------
-  // Parsing & output guard
-  // ---------------------------------------------------------------------------
   ({String reflectionText, String? suggestedAction}) _parseResponse(
     String raw,
   ) {
     var cleaned = raw.trim();
-    // เผื่อโมเดลห่อด้วย ```json ... ```
     cleaned = cleaned
         .replaceAll(RegExp(r'^```(?:json)?', caseSensitive: false), '')
         .replaceAll(RegExp(r'```$'), '')
@@ -241,7 +219,6 @@ $safeText
     );
   }
 
-  /// ตัวกรองชั้นสุดท้าย: ถ้าโมเดลหลุดใช้ป้ายวินิจฉัย → ทิ้งผลแล้วใช้ fallback
   static const List<String> _bannedOutputTerms = [
     'โรคซึมเศร้า',
     'ไบโพลาร์',
@@ -258,97 +235,9 @@ $safeText
   bool _violatesSafetyRules(String output) =>
       _bannedOutputTerms.any(output.contains);
 
-  // ---------------------------------------------------------------------------
-  // Crisis handling (ฝั่งแอป)
-  // ---------------------------------------------------------------------------
-  static const List<String> _crisisKeywords = [
-    'ฆ่าตัวตาย',
-    'อยากตาย',
-    'ไม่อยากมีชีวิต',
-    'ไม่อยากอยู่ต่อ',
-    'จบชีวิต',
-    'ทำร้ายตัวเอง',
-    'กรีดแขน',
-    'suicide',
-  ];
+  String _moodLabel(String mood) =>
+      MoodMateConstants.moodLabels[mood] ?? 'ไม่ระบุ';
 
-  bool _containsCrisisSignal(String text) {
-    final lower = text.toLowerCase();
-    return _crisisKeywords.any(lower.contains);
-  }
-
-  ReflectionResult _crisisResult() => _result(
-    reflectionText:
-        'ขอบคุณที่ไว้ใจเขียนเรื่องนี้ลงมา สิ่งที่เล่าฟังดูหนักมากจริง ๆ '
-        'และคุณไม่จำเป็นต้องแบกมันไว้คนเดียว ถ้ารู้สึกว่าอาจทำร้ายตัวเอง '
-        'ขอให้ติดต่อคนที่ไว้ใจหรือสายด่วนสุขภาพจิต 1323 (กรมสุขภาพจิต) ได้เลยนะ',
-    suggestedAction:
-        'ลองบอกคนที่ไว้ใจสักคนตอนนี้ว่า "ตอนนี้ฉันรู้สึกไม่ไหว อยู่เป็นเพื่อนหน่อยได้ไหม"',
-  );
-
-  // ---------------------------------------------------------------------------
-  // Fallback (Mock Response)
-  // ---------------------------------------------------------------------------
-  ReflectionResult _fallbackResult({
-    required String mood,
-    required List<String> contextTags,
-  }) {
-    final base = switch (mood) {
-      'happy' =>
-        'ดูเหมือนวันนี้มีบางอย่างที่ทำให้รู้สึกดี ขอบคุณที่เก็บช่วงเวลานี้ไว้ในบันทึก '
-            'การสังเกตว่าอะไรทำให้เรารู้สึกดีอาจช่วยให้เราจดจำมันได้ชัดขึ้น',
-      'angry' =>
-        'ฟังดูเหมือนวันนี้มีบางอย่างที่ทำให้รู้สึกหงุดหงิดหรือไม่เป็นไปตามที่หวัง '
-            'ความรู้สึกแบบนี้เกิดขึ้นได้ และการได้เขียนออกมาก็เป็นก้าวหนึ่งของการรับฟังตัวเอง',
-      'sad' =>
-        'ดูเหมือนว่าวันนี้อาจมีบางเรื่องที่กระทบใจอยู่ ขอบคุณที่เล่าให้ MoodMate ฟัง '
-            'ไม่ต้องรีบทำให้ความรู้สึกนี้หายไปก็ได้ ให้เวลากับตัวเองสักครู่',
-      _ =>
-        'ขอบคุณที่ใช้เวลาเขียนบันทึกวันนี้ แม้เป็นวันที่ไม่ได้มีอะไรพิเศษ '
-            'การหยุดสังเกตความรู้สึกของตัวเองก็มีคุณค่าในตัวมันเอง',
-    };
-
-    final tagNote = contextTags.isEmpty
-        ? ''
-        : ' (วันนี้คุณเลือกบริบท: ${contextTags.join(', ')})';
-
-    return _result(
-      reflectionText: '$base$tagNote',
-      suggestedAction: _fallbackAction(mood),
-    );
-  }
-
-  String _fallbackAction(String mood) => switch (mood) {
-    'happy' => 'ลองจดสั้น ๆ สักบรรทัดว่าอะไรทำให้วันนี้ดี',
-    'angry' => 'ลองหายใจเข้าลึก ๆ ช้า ๆ สามครั้ง แล้วดื่มน้ำสักแก้ว',
-    'sad' => 'ลองพักสายตาจากหน้าจอสักหนึ่งนาที แล้วดื่มน้ำสักอึก',
-    _ => 'ลองยืดเส้นยืดสายเบา ๆ หรือพักสายตาจากหน้าจอสักครู่',
-  };
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-  ReflectionResult _result({
-    required String reflectionText,
-    String? suggestedAction,
-  }) {
-    return ReflectionResult(
-      reflectionText: reflectionText,
-      suggestedAction: suggestedAction,
-      disclaimer: disclaimerText, // แนบเสมอ
-    );
-  }
-
-  /// แปลงค่า mood ในฐานข้อมูล → ป้ายภาษาไทย (ค่าที่เก็บต้องเป็น happy/angry/sad/neutral)
-  String _moodLabel(String mood) => switch (mood) {
-    'happy' => 'ยิ้ม / มีความสุข',
-    'angry' => 'โกรธ',
-    'sad' => 'เศร้า',
-    'neutral' => 'เฉย ๆ',
-    _ => 'ไม่ระบุ',
-  };
-
-  /// log เฉพาะประเภทของ error เท่านั้น — ห้าม log diary text / prompt / API key
   void _logFailure(String reason) {
     developer.log(
       'Gemini reflection failed, using fallback: $reason',
