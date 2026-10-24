@@ -1,24 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/weekly_insight.dart';
-
-// TODO: เปลี่ยนไปใช้ค่ากลางจาก moodmate_constants.dart เมื่อไฟล์นั้นมีแล้ว
-const _moodOrder = ['happy', 'angry', 'sad', 'neutral'];
-const _moodLabels = {
-  'happy': 'ยิ้ม',
-  'angry': 'โกรธ',
-  'sad': 'เศร้า',
-  'neutral': 'เฉย ๆ',
-};
-const _tagOrder = [
-  'Coding',
-  'Lab',
-  'Project',
-  'Group Work',
-  'Presentation',
-  'Deadline',
-  'Personal',
-];
+import 'weekly_insight_config.dart';
 
 class WeeklyInsightPage extends StatelessWidget {
   const WeeklyInsightPage({super.key, required this.insight});
@@ -29,21 +12,37 @@ class WeeklyInsightPage extends StatelessWidget {
 
   String _topMoodText() {
     var maxCount = 0;
-    for (final m in _moodOrder) {
+    for (final m in weeklyInsightMoods) {
       final c = insight.moodCounts[m] ?? 0;
       if (c > maxCount) maxCount = c;
     }
-    final tops = _moodOrder
+    return weeklyInsightMoods
         .where((m) => (insight.moodCounts[m] ?? 0) == maxCount)
-        .map((m) => _moodLabels[m]!)
+        .map((m) => weeklyInsightMoodLabels[m]!)
         .join(' / ');
-    return tops;
+  }
+
+  /// เรียงจากบ่อยที่สุด ถ้าเท่ากันให้ตามลำดับในรายการกลาง
+  List<String> _sortedTags() {
+    final tags = [...weeklyInsightContextTags];
+    tags.sort((a, b) {
+      final diff =
+          (insight.contextCounts[b] ?? 0) - (insight.contextCounts[a] ?? 0);
+      if (diff != 0) return diff;
+      return weeklyInsightContextTags.indexOf(a) -
+          weeklyInsightContextTags.indexOf(b);
+    });
+    return tags;
   }
 
   @override
   Widget build(BuildContext context) {
     // weekEnd ไม่รวมในช่วง จึงแสดงวันสุดท้ายเป็น weekEnd ลบ 1 วัน
-    final lastDay = insight.weekEnd.subtract(const Duration(days: 1));
+    final lastDay = DateTime(
+      insight.weekEnd.year,
+      insight.weekEnd.month,
+      insight.weekEnd.day - 1,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('สรุปรายสัปดาห์')),
@@ -73,18 +72,16 @@ class WeeklyInsightPage extends StatelessWidget {
                 const SizedBox(height: 16),
                 _CountSection(
                   title: 'อารมณ์ในสัปดาห์นี้',
-                  keys: _moodOrder,
-                  labels: _moodLabels,
+                  keys: weeklyInsightMoods,
+                  labels: weeklyInsightMoodLabels,
                   counts: insight.moodCounts,
-                  total: insight.totalEntries,
                 ),
                 const SizedBox(height: 16),
                 _CountSection(
-                  title: 'บริบทที่พบบ่อย',
-                  keys: _tagOrder,
-                  labels: {for (final t in _tagOrder) t: t},
+                  title: 'บริบทที่พบบ่อย (เรียงจากบ่อยที่สุด)',
+                  keys: _sortedTags(),
+                  labels: {for (final t in weeklyInsightContextTags) t: t},
                   counts: insight.contextCounts,
-                  total: insight.totalEntries,
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -121,17 +118,20 @@ class _CountSection extends StatelessWidget {
     required this.keys,
     required this.labels,
     required this.counts,
-    required this.total,
   });
 
   final String title;
   final List<String> keys;
   final Map<String, String> labels;
   final Map<String, int> counts;
-  final int total;
 
   @override
   Widget build(BuildContext context) {
+    // แท่งเทียบกับค่ามากสุดในกลุ่มนี้ ทำให้เห็นความต่างชัดแม้มีบันทึกเยอะ
+    final maxCount = keys
+        .map((k) => counts[k] ?? 0)
+        .fold<int>(0, (a, b) => a > b ? a : b);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -144,7 +144,7 @@ class _CountSection extends StatelessWidget {
               _BarRow(
                 label: labels[key] ?? key,
                 count: counts[key] ?? 0,
-                total: total,
+                maxCount: maxCount,
               ),
               const SizedBox(height: 8),
             ],
@@ -159,16 +159,16 @@ class _BarRow extends StatelessWidget {
   const _BarRow({
     required this.label,
     required this.count,
-    required this.total,
+    required this.maxCount,
   });
 
   final String label;
   final int count;
-  final int total;
+  final int maxCount;
 
   @override
   Widget build(BuildContext context) {
-    final value = total == 0 ? 0.0 : count / total;
+    final value = maxCount == 0 ? 0.0 : count / maxCount;
     return Row(
       children: [
         SizedBox(width: 96, child: Text(label)),
