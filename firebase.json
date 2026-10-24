@@ -1,0 +1,24 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "moodmate-15d92",
+          "appId": "1:497900916114:android:33fc8004b987f40f8e054b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "moodmate-15d92",
+          "configurations": {
+            "android": "1:497900916114:android:33fc8004b987f40f8e054b"
+          }
+        }
+      }
+    }
+  }
+}
