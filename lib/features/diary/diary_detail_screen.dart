@@ -1,195 +1,228 @@
 import 'package:flutter/material.dart';
+
 import '../../app_dependencies.dart';
-import 'ai_reflection_screen.dart'; // <--- สำคัญมาก ต้องมีบรรทัดนี้ครับ
+import '../../core/constants/moodmate_constants.dart';
+import '../../models/mood_entry.dart';
+import 'ai_reflection_screen.dart';
 
-class DiaryDetailScreen extends StatelessWidget {
-  final AppDependencies dependencies;
-  final DateTime selectedDate; 
-
+class DiaryDetailScreen extends StatefulWidget {
   const DiaryDetailScreen({
-    super.key, 
+    super.key,
     required this.dependencies,
-    required this.selectedDate,
+    required this.entry,
   });
 
-  String getFormattedDate(DateTime date) {
-    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  final AppDependencies dependencies;
+  final MoodEntry entry;
+
+  @override
+  State<DiaryDetailScreen> createState() => _DiaryDetailScreenState();
+}
+
+class _DiaryDetailScreenState extends State<DiaryDetailScreen> {
+  bool _isDeleting = false;
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'ม.ค.',
+      'ก.พ.',
+      'มี.ค.',
+      'เม.ย.',
+      'พ.ค.',
+      'มิ.ย.',
+      'ก.ค.',
+      'ส.ค.',
+      'ก.ย.',
+      'ต.ค.',
+      'พ.ย.',
+      'ธ.ค.',
+    ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Future<void> _confirmDelete() async {
+    if (_isDeleting) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ลบบันทึกนี้หรือไม่?'),
+        content: const Text('เมื่อลบแล้วจะไม่สามารถกู้คืนบันทึกนี้ได้'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ลบ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final userId = widget.dependencies.auth.currentUserId;
+    if (userId == null || userId != widget.entry.userId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่พบสิทธิ์สำหรับลบบันทึกนี้')),
+      );
+      return;
+    }
+
+    setState(() => _isDeleting = true);
+    final navigator = Navigator.of(context);
+    try {
+      await widget.dependencies.diary.deleteEntry(
+        userId: userId,
+        entryId: widget.entry.id,
+      );
+      if (mounted) navigator.pop(true);
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'ลบบันทึกไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _openReflection() async {
+    final consented = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ส่งบันทึกไปให้ AI สะท้อนความรู้สึก?'),
+        content: const Text(
+          'หากเปิดใช้ Gemini API เนื้อหาบันทึกนี้และข้อมูลอารมณ์/แท็กจะถูกส่งไปยัง '
+          'ผู้ให้บริการ AI เพื่อสร้างข้อความสะท้อนใจ โปรดหลีกเลี่ยงข้อมูลที่ระบุตัวตนได้',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('ดำเนินการต่อ'),
+          ),
+        ],
+      ),
+    );
+    if (consented != true || !mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AiReflectionScreen(
+          dependencies: widget.dependencies,
+          entry: widget.entry,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final moodLabel =
+        MoodMateConstants.moodLabels[widget.entry.mood] ?? widget.entry.mood;
     return Scaffold(
       backgroundColor: const Color(0xFFF6F5EE),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF222222), size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          getFormattedDate(selectedDate),
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF222222)),
-        ),
-        centerTitle: true,
+        title: Text(_formatDate(widget.entry.createdAt)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_horiz, color: Color(0xFF222222)),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.white,
-                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-                builder: (ctx) => Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.share_outlined, color: Color(0xFF222222)),
-                        title: const Text('แชร์บันทึกนี้'),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('คัดลอกลิงก์บันทึกสำเร็จ')),
-                          );
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.delete_outline, color: Colors.red),
-                        title: const Text('ลบบันทึกนี้', style: TextStyle(color: Colors.red)),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('ลบข้อมูลเรียบร้อยแล้ว')),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+            tooltip: 'ลบบันทึก',
+            onPressed: _isDeleting ? null : _confirmDelete,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                Container(
-                  width: 88, height: 88,
-                  decoration: const BoxDecoration(color: Color(0xFFEFECE2), shape: BoxShape.circle),
-                  child: const Icon(Icons.sentiment_satisfied_alt, size: 48, color: Color(0xFF333333)),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: const Icon(Icons.light_mode_outlined, size: 16, color: Color(0xFFC48E66)),
-                ),
-              ],
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          CircleAvatar(
+            radius: 44,
+            backgroundColor: const Color(0xFFFDEADB),
+            child: Icon(
+              _moodIcon(widget.entry.mood),
+              size: 48,
+              color: const Color(0xFF333333),
             ),
-            const SizedBox(height: 16),
-            const Text('มีความสุข', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.access_time, size: 14, color: Color(0xFF888888)),
-                SizedBox(width: 4),
-                Text('21:30 น.', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
-              ],
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              moodLabel,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 24),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              '${widget.entry.createdAt.hour.toString().padLeft(2, '0')}:'
+              '${widget.entry.createdAt.minute.toString().padLeft(2, '0')} น.',
+              style: const TextStyle(color: Color(0xFF888888)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (widget.entry.contextTags.isNotEmpty)
             Wrap(
-              spacing: 12, runSpacing: 12, alignment: WrapAlignment.center,
-              children: [
-                _buildTagChip('โปรเจกต์'),
-                _buildTagChip('โค้ดดิ้ง'),
-                _buildTagChip('พักผ่อนช่วงค่ำ', icon: Icons.coffee_outlined),
-              ],
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: widget.entry.contextTags
+                  .map((tag) => Chip(label: Text(tag)))
+                  .toList(),
             ),
-            const SizedBox(height: 32),
-            const Text(
-              'วันนี้เป็นวันที่ยอดเยี่ยมมาก ได้จัดการงานที่ค้างไว้จนเสร็จลุล่วง รู้สึกภูมิใจในตัวเอง ได้พักผ่อนและทำกิจกรรมที่ชอบ สบายใจมากๆ',
-              style: TextStyle(fontSize: 15, color: Color(0xFF444444), height: 1.8),
-              textAlign: TextAlign.start,
-            ),
-            const SizedBox(height: 40),
-            
-            // กดการ์ด AI เพื่อไปหน้า AiReflectionScreen พร้อมส่ง selectedDate ไปด้วย
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AiReflectionScreen(
-                      dependencies: dependencies,
-                      selectedDate: selectedDate, 
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(color: Colors.black..withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))],
-                  border: Border.all(color: const Color(0xFFFDEADB)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: const [
-                            Icon(Icons.auto_awesome, size: 20, color: Color(0xFFC48E66)),
-                            SizedBox(width: 8),
-                            Text('ข้อความจาก AI', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-                          ],
-                        ),
-                        const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF888888)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'การมีความสุขกับเรื่องเล็กๆ น้อยๆ ในแต่ละวัน คือพลังใจที่ยิ่งใหญ่ รักษาความรู้สึกดีๆ แบบนี้ไว้นะคะ (แตะเพื่อดูข้อคิดเตือนใจ)',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF666666), height: 1.6),
-                    ),
-                  ],
+          const SizedBox(height: 24),
+          Card(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                widget.entry.diaryText.isEmpty
+                    ? 'ไม่มีข้อความบันทึก'
+                    : widget.entry.diaryText,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF444444),
+                  height: 1.8,
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-          ],
-        ),
+          ),
+          const SizedBox(height: 24),
+          Card(
+            color: Colors.white,
+            child: ListTile(
+              leading: const Icon(Icons.auto_awesome, color: Color(0xFFC48E66)),
+              title: const Text('สะท้อนความรู้สึกด้วย MoodMate'),
+              subtitle: const Text('ผลลัพธ์อ้างอิงจากบันทึกนี้เท่านั้น'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: _openReflection,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildTagChip(String label, {IconData? icon}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: const Color(0xFFEFECE2), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon == null)
-            Container(margin: const EdgeInsets.only(right: 6), width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFC48E66), shape: BoxShape.circle))
-          else
-            Container(margin: const EdgeInsets.only(right: 6), child: Icon(icon, size: 14, color: Color(0xFF666666))),
-          Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF444444))),
-        ],
-      ),
-    );
+  IconData _moodIcon(String mood) {
+    switch (mood) {
+      case 'happy':
+        return Icons.sentiment_satisfied_alt;
+      case 'angry':
+        return Icons.sentiment_very_dissatisfied;
+      case 'sad':
+        return Icons.sentiment_dissatisfied;
+      default:
+        return Icons.sentiment_neutral;
+    }
   }
 }

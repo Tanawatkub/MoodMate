@@ -12,6 +12,7 @@
 
 import '../core/constants/moodmate_constants.dart';
 import '../models/reflection_result.dart';
+import '../models/weekly_insight.dart';
 import 'reflection_service.dart';
 
 class MockReflectionService implements ReflectionService {
@@ -19,6 +20,33 @@ class MockReflectionService implements ReflectionService {
   const MockReflectionService({this.delay = Duration.zero});
 
   final Duration delay;
+
+  @override
+  Future<String> summarizeInsight({required WeeklyInsight insight}) async {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    if (insight.totalEntries == 0) {
+      return 'ยังไม่มีบันทึกในช่วงเวลานี้ เมื่อเริ่มบันทึกอารมณ์ MoodMate '
+          'จะแสดงแนวโน้มจากข้อมูลของคุณที่นี่';
+    }
+
+    final topMood = insight.moodCounts.entries.reduce(
+      (a, b) => a.value >= b.value ? a : b,
+    );
+    final topTag = insight.contextCounts.entries.isEmpty
+        ? null
+        : insight.contextCounts.entries.reduce(
+            (a, b) => a.value >= b.value ? a : b,
+          );
+    final moodLabel = MoodMateConstants.moodLabels[topMood.key] ?? topMood.key;
+    final tagText = topTag == null
+        ? 'ยังไม่มีบริบทที่บันทึกซ้ำเด่นชัด'
+        : 'บริบทที่พบบ่อยคือ ${topTag.key} (${topTag.value} ครั้ง)';
+    return 'ช่วงนี้คุณบันทึกความรู้สึก ${insight.totalEntries} ครั้ง '
+        'อารมณ์ที่พบมากที่สุดคือ$moodLabel (${topMood.value} ครั้ง) '
+        'และ$tagText สถิตินี้บอกเพียงสิ่งที่ถูกบันทึก ไม่ได้ยืนยันสาเหตุ';
+  }
 
   /// Disclaimer เรื่องสุขภาพจิต แนบกับผลลัพธ์ทุกครั้ง
   static const String disclaimerText =

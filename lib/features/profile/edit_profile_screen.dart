@@ -1,21 +1,51 @@
 import 'package:flutter/material.dart';
+
 import '../../app_dependencies.dart';
+import '../auth/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
-  final AppDependencies dependencies;
   const EditProfileScreen({super.key, required this.dependencies});
+
+  final AppDependencies dependencies;
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final TextEditingController _nameController = TextEditingController(text: "ผู้ใช้งาน MoodMate");
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: widget.dependencies.auth.currentDisplayName ?? '',
+    );
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_isSaving || !_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+    try {
+      await widget.dependencies.auth.updateDisplayName(_nameController.text);
+      if (mounted) Navigator.pop(context, _nameController.text.trim());
+    } on AuthException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -24,66 +54,83 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       backgroundColor: const Color(0xFFF6F5EE),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF222222)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('แก้ไขโปรไฟล์', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
+        title: const Text('แก้ไขโปรไฟล์'),
         centerTitle: true,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Stack(
-                children: [
-                  Container(
-                    width: 96, height: 96,
-                    decoration: const BoxDecoration(color: Color(0xFFEFECE2), shape: BoxShape.circle),
-                    child: const Icon(Icons.person_outline, size: 48, color: Color(0xFF444444)),
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: CircleAvatar(
+                  radius: 48,
+                  backgroundColor: Color(0xFFEFECE2),
+                  child: Icon(
+                    Icons.person_outline,
+                    size: 48,
+                    color: Color(0xFF444444),
                   ),
-                  Positioned(
-                    bottom: 0, right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(color: Color(0xFF222222), shape: BoxShape.circle),
-                      child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'ชื่อผู้ใช้งาน',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _nameController,
+                maxLength: AuthService.maxDisplayNameLength,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _save(),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  hintText: 'กรอกชื่อที่ต้องการแสดง',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                validator: (value) {
+                  final name = value?.trim() ?? '';
+                  if (name.isEmpty) return 'กรุณากรอกชื่อ';
+                  if (name.runes.length > AuthService.maxDisplayNameLength) {
+                    return 'ชื่อยาวเกิน ${AuthService.maxDisplayNameLength} ตัวอักษร';
+                  }
+                  return null;
+                },
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _save,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF222222),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text('ชื่อผู้ใช้งาน', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                filled: true, fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity, height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  // TODO: เชื่อม AuthService.updateDisplayName()
-                  // ส่งชื่อที่ถูกแก้ไขกลับไปให้หน้าก่อนหน้า
-                  Navigator.pop(context, _nameController.text);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF222222),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                  child: _isSaving
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'บันทึกข้อมูล',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
-                child: const Text('บันทึกข้อมูล', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );

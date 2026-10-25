@@ -5,7 +5,13 @@ import 'signup_screen.dart'; // เพิ่มการ Import ไฟล์ห�
 
 class LoginScreen extends StatefulWidget {
   final AppDependencies dependencies;
-  const LoginScreen({super.key, required this.dependencies});
+  final VoidCallback? onLoginSuccess;
+
+  const LoginScreen({
+    super.key,
+    required this.dependencies,
+    this.onLoginSuccess,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -20,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   Future<void> _handleLogin() async {
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -28,6 +35,13 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text,
         password: _passwordController.text,
       );
+      if (widget.dependencies.auth.currentUserId == null) {
+        throw const AuthException(
+          'session-not-ready',
+          'ยืนยันตัวตนสำเร็จ แต่โหลดสถานะบัญชีไม่สำเร็จ กรุณาลองใหม่',
+        );
+      }
+      if (mounted) widget.onLoginSuccess?.call();
     } on AuthException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -36,6 +50,35 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handlePasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรอกอีเมลก่อนเพื่อรับลิงก์ตั้งรหัสผ่านใหม่'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await widget.dependencies.auth.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ส่งลิงก์ตั้งรหัสผ่านใหม่ไปยังอีเมลแล้ว'),
+          ),
+        );
+      }
+    } on AuthException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
     }
   }
 
@@ -154,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(
-                    onTap: () {},
+                    onTap: _handlePasswordReset,
                     child: const Text(
                       'ลืมรหัสผ่าน?',
                       style: TextStyle(

@@ -22,12 +22,8 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
-  // ฟังก์ชันตรวจสอบรหัสผ่านด้วย Regex (ขั้นต่ำ 8 ตัว, มีพิมพ์เล็ก, พิมพ์ใหญ่, ตัวเลข, อักขระพิเศษ)
   bool _isPasswordValid(String password) {
-    final regex = RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$',
-    );
-    return regex.hasMatch(password);
+    return password.length >= 6;
   }
 
   Future<void> _handleSignup() async {
@@ -127,7 +123,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ช่องกรอกรหัสผ่าน
                 _buildTextField(
                   controller: _passwordController,
-                  hintText: 'รหัสผ่าน (8+ ตัวอักษร, พิมพ์ใหญ่, เล็ก, พิเศษ)',
+                  hintText: 'รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)',
                   icon: Icons.lock_outline,
                   obscureText: _obscurePassword,
                   onToggleVisibility: () =>
@@ -137,7 +133,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       return 'กรุณากรอกรหัสผ่าน';
                     }
                     if (!_isPasswordValid(value)) {
-                      return 'ต้องมี 8+ ตัวอักษร, พิมพ์เล็ก, ใหญ่, ตัวเลข และอักขระพิเศษ';
+                      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
                     }
                     return null;
                   },

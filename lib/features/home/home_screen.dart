@@ -1,250 +1,382 @@
 import 'package:flutter/material.dart';
+
 import '../../app_dependencies.dart';
+import '../../core/constants/moodmate_constants.dart';
+import '../../models/mood_entry.dart';
 import '../check_in/new_check_in_screen.dart';
 import '../diary/diary_detail_screen.dart';
 import '../profile/profile_screen.dart';
+import '../weekly_insight/weekly_insight_calculator.dart';
+import '../weekly_insight/weekly_insight_config.dart';
 
 class HomeScreen extends StatefulWidget {
-  final AppDependencies dependencies;
   const HomeScreen({super.key, required this.dependencies});
+
+  final AppDependencies dependencies;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String getThaiDate(DateTime date) {
-    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  late Future<List<MoodEntry>> _entriesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _entriesFuture = _loadEntries();
+  }
+
+  Future<List<MoodEntry>> _loadEntries() async {
+    final userId = widget.dependencies.auth.currentUserId;
+    if (userId == null) {
+      throw StateError('ไม่พบผู้ใช้ที่เข้าสู่ระบบ');
+    }
+    final now = DateTime.now();
+    final recentStart = DateTime(now.year, now.month, now.day - 29);
+    final createdAt = widget.dependencies.auth.currentUserCreatedAt;
+    final accountStart = createdAt == null
+        ? recentStart
+        : DateTime(createdAt.year, createdAt.month, createdAt.day);
+    final from = accountStart.isAfter(recentStart) ? accountStart : recentStart;
+    final to = DateTime(now.year, now.month, now.day + 1);
+    return widget.dependencies.diary.getEntries(
+      userId: userId,
+      from: from,
+      to: to,
+    );
+  }
+
+  void _reload() {
+    setState(() => _entriesFuture = _loadEntries());
+  }
+
+  Future<void> _refresh() async {
+    final future = _loadEntries();
+    setState(() => _entriesFuture = future);
+    await future;
+  }
+
+  String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
+
+  String _formatDate(DateTime date) {
+    const months = [
+      'ม.ค.',
+      'ก.พ.',
+      'มี.ค.',
+      'เม.ย.',
+      'พ.ค.',
+      'มิ.ย.',
+      'ก.ค.',
+      'ส.ค.',
+      'ก.ย.',
+      'ต.ค.',
+      'พ.ย.',
+      'ธ.ค.',
+    ];
     return '${date.day} ${months[date.month - 1]}';
   }
 
-  String getThaiDayOfWeek(DateTime date) {
+  String _dayLabel(DateTime date) {
     const days = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
     return days[date.weekday - 1];
   }
 
-  String getThaiMonthYear(DateTime date) {
-    const monthsFull = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-    return '${monthsFull[date.month - 1]} ${date.year}';
-  }
+  String _moodLabel(String mood) => MoodMateConstants.moodLabels[mood] ?? mood;
 
-  Map<String, dynamic> _getMoodUI(String mood) {
+  IconData _moodIcon(String mood) {
     switch (mood) {
       case 'happy':
-        return {'icon': Icons.sentiment_satisfied_alt, 'bgColor': const Color(0xFFFDEADB), 'color': const Color(0xFFF4B886)};
-      case 'neutral':
-        return {'icon': Icons.sentiment_neutral, 'bgColor': const Color(0xFFEFECE2), 'color': const Color(0xFF888888)};
-      case 'sad':
-        return {'icon': Icons.sentiment_dissatisfied, 'bgColor': const Color(0xFFE2ECF5), 'color': const Color(0xFF7189A1)};
+        return Icons.sentiment_satisfied_alt;
       case 'angry':
-        return {'icon': Icons.sentiment_very_dissatisfied, 'bgColor': const Color(0xFFF4C8C8), 'color': const Color(0xFFE5989B)};
+        return Icons.sentiment_very_dissatisfied;
+      case 'sad':
+        return Icons.sentiment_dissatisfied;
       default:
-        return {'icon': Icons.sentiment_satisfied_alt, 'bgColor': const Color(0xFFFDEADB), 'color': const Color(0xFFF4B886)};
+        return Icons.sentiment_neutral;
     }
+  }
+
+  Future<void> _openNewCheckIn() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NewCheckInScreen(dependencies: widget.dependencies),
+      ),
+    );
+    if (saved == true && mounted) _reload();
+  }
+
+  Future<void> _openEntry(MoodEntry entry) async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            DiaryDetailScreen(dependencies: widget.dependencies, entry: entry),
+      ),
+    );
+    if (mounted) _reload();
   }
 
   @override
   Widget build(BuildContext context) {
-    DateTime now = DateTime.now();
-    DateTime weekStart = now.subtract(const Duration(days: 6));
+    final now = DateTime.now();
+    final weekStart = DateTime(now.year, now.month, now.day - 6);
+    final weekEnd = DateTime(now.year, now.month, now.day + 1);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F5EE),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('MoodMate', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
+        title: const Text(
+          'MoodMate',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF222222),
+          ),
+        ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24.0),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProfileScreen(dependencies: widget.dependencies),
-                  ),
-                );
-              },
-              child: const CircleAvatar(
-                radius: 18, backgroundColor: Color(0xFF222222),
-                child: Icon(Icons.person_outline, color: Colors.white, size: 20),
+          IconButton(
+            tooltip: 'โปรไฟล์',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    ProfileScreen(dependencies: widget.dependencies),
               ),
+            ),
+            icon: const CircleAvatar(
+              radius: 18,
+              backgroundColor: Color(0xFF222222),
+              child: Icon(Icons.person_outline, color: Colors.white, size: 20),
             ),
           ),
+          const SizedBox(width: 12),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: FutureBuilder<List<MoodEntry>>(
+        future: _entriesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'โหลดบันทึกไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _reload,
+                      child: const Text('ลองใหม่'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          final entries = snapshot.data ?? const <MoodEntry>[];
+          final entryByDay = <String, MoodEntry>{};
+          for (final entry in entries) {
+            entryByDay.putIfAbsent(_dateKey(entry.createdAt), () => entry);
+          }
+          final insight = WeeklyInsightCalculator().calculate(
+            entries: entries,
+            weekStart: weekStart,
+            weekEnd: weekEnd,
+          );
+          final topMood = weeklyInsightMoods.fold<String?>(
+            null,
+            (top, mood) =>
+                (insight.moodCounts[mood] ?? 0) >
+                    (top == null ? 0 : insight.moodCounts[top] ?? 0)
+                ? mood
+                : top,
+          );
+          final recentStart = DateTime(now.year, now.month, now.day - 29);
+          final createdAt = widget.dependencies.auth.currentUserCreatedAt;
+          final accountStart = createdAt == null
+              ? recentStart
+              : DateTime(createdAt.year, createdAt.month, createdAt.day);
+          final calendarStart = accountStart.isAfter(recentStart)
+              ? accountStart
+              : recentStart;
+          final visibleDayCount = now.difference(calendarStart).inDays + 1;
+          final calendarDays = List.generate(
+            visibleDayCount,
+            (index) => DateTime(
+              calendarStart.year,
+              calendarStart.month,
+              calendarStart.day + index,
+            ),
+          );
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
               children: [
-                const Text('บันทึกความรู้สึกอย่างเบามือ', style: TextStyle(color: Color(0xFF666666), fontSize: 13)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFFEFECE2), borderRadius: BorderRadius.circular(16)),
-                  child: Row(
-                    children: [
-                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF4B886), shape: BoxShape.circle)),
-                      const SizedBox(width: 6),
-                      Text('วันนี้ • ${getThaiDate(now)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF444444))),
-                    ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'บันทึกความรู้สึกอย่างเบามือ',
+                      style: TextStyle(color: Color(0xFF666666), fontSize: 13),
+                    ),
+                    Text(
+                      'วันนี้ • ${_formatDate(now)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF444444),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Card(
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '7 วันล่าสุด',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (insight.totalEntries == 0)
+                          const Text('ยังไม่มีบันทึกในช่วง 7 วันล่าสุด')
+                        else
+                          Row(
+                            children: [
+                              Icon(_moodIcon(topMood ?? 'neutral'), size: 40),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'บันทึก ${insight.totalEntries} ครั้ง'
+                                  '${topMood == null ? '' : ' • อารมณ์ที่พบบ่อย: ${_moodLabel(topMood)}'}',
+                                ),
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(7, (index) {
+                            final day = DateTime(
+                              now.year,
+                              now.month,
+                              now.day - 6 + index,
+                            );
+                            return Column(
+                              children: [
+                                Text(_dayLabel(day)),
+                                const SizedBox(height: 6),
+                                Icon(
+                                  entryByDay[_dateKey(day)] == null
+                                      ? Icons.circle_outlined
+                                      : Icons.circle,
+                                  size: 10,
+                                  color: const Color(0xFFC48E66),
+                                ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black..withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const SizedBox(height: 28),
+                Center(
+                  child: Column(
                     children: [
-                      const Text('สัปดาห์นี้', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-                      Text('${getThaiDate(weekStart)} - ${getThaiDate(now)} ${now.year}', style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Container(
-                        width: 56, height: 56,
-                        decoration: const BoxDecoration(color: Color(0xFFFDEADB), shape: BoxShape.circle),
-                        child: const Icon(Icons.sentiment_satisfied_alt, size: 32, color: Color(0xFF333333)),
+                      Text(
+                        calendarDays.length < 30
+                            ? 'ตั้งแต่สมัครสมาชิก'
+                            : '30 วันล่าสุด',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('ภาพรวม: มีความสุขเป็นส่วนใหญ่', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-                            SizedBox(height: 4),
-                            Text('คุณรักษาพลังบวกไว้ได้ดีมากในสัปดาห์นี้ ✨', style: TextStyle(fontSize: 12, color: Color(0xFF666666))),
-                          ],
+                      const SizedBox(height: 4),
+                      const Text(
+                        'ประวัติการบันทึกของคุณ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF888888),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(7, (index) {
-                      DateTime day = now.subtract(Duration(days: 6 - index));
-                      bool isToday = index == 6;
-                      bool mockHasRecord = index % 2 != 0; 
-                      return _buildDayDot(getThaiDayOfWeek(day), mockHasRecord, isToday: isToday);
-                    }),
+                ),
+                const SizedBox(height: 18),
+                GridView.builder(
+                  key: const ValueKey('history-calendar'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: calendarDays.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.9,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            Center(
-              child: Column(
-                children: [
-                  Text(getThaiMonthYear(now), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-                  const SizedBox(height: 4),
-                  const Text('ประวัติการบันทึกของคุณ', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            GridView.count(
-              crossAxisCount: 3, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 24, crossAxisSpacing: 16, childAspectRatio: 0.85,
-              children: List.generate(12, (index) {
-                DateTime day = now.subtract(Duration(days: index));
-                bool isDashed = index % 4 == 3; 
-                
-                List<String> sampleMoods = ['happy', 'neutral', 'sad', 'happy', 'angry', 'neutral'];
-                String moodKey = sampleMoods[index % sampleMoods.length];
-                var moodUI = _getMoodUI(moodKey);
-
-                return _buildGridItem(
-                  context, 
-                  day, 
-                  isDashed ? null : moodUI['icon'], 
-                  isDashed ? const Color(0xFFF6F5EE) : moodUI['bgColor'], 
-                  isDashed: isDashed,
-                );
-              }),
-            ),
-            const SizedBox(height: 100),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NewCheckInScreen(dependencies: widget.dependencies),
+                  itemBuilder: (context, index) {
+                    final day = calendarDays[index];
+                    final entry = entryByDay[_dateKey(day)];
+                    return InkWell(
+                      onTap: entry == null ? null : () => _openEntry(entry),
+                      borderRadius: BorderRadius.circular(40),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: CircleAvatar(
+                              backgroundColor: entry == null
+                                  ? const Color(0xFFEFECE2)
+                                  : const Color(0xFFFDEADB),
+                              child: Icon(
+                                entry == null
+                                    ? Icons.remove
+                                    : _moodIcon(entry.mood),
+                                color: const Color(0xFF333333),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatDate(day),
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           );
         },
-        backgroundColor: const Color(0xFF222222), elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
-    );
-  }
-
-  Widget _buildDayDot(String day, bool hasRecord, {bool isToday = false}) {
-    return Column(
-      children: [
-        Text(day, style: TextStyle(fontSize: 12, fontWeight: isToday ? FontWeight.bold : FontWeight.normal, color: isToday ? const Color(0xFF222222) : const Color(0xFF888888))),
-        const SizedBox(height: 8),
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: hasRecord ? const Color(0xFFF4B886) : const Color(0xFFEFECE2), shape: BoxShape.circle)),
-      ],
-    );
-  }
-
-  Widget _buildGridItem(BuildContext context, DateTime day, IconData? icon, Color bgColor, {bool isDashed = false}) {
-    return GestureDetector(
-      onTap: () {
-        if (!isDashed) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DiaryDetailScreen(
-                dependencies: widget.dependencies,
-                selectedDate: day,
-              ),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ยังไม่มีบันทึกครับ แตะปุ่ม + ด้านล่างเพื่อเพิ่มได้เลย ✨')),
-          );
-        }
-      },
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: bgColor, 
-                shape: BoxShape.circle, 
-                border: isDashed ? Border.all(color: const Color(0xFFE8E5D6), width: 1.5) : null,
-              ),
-              child: isDashed 
-                ? Center(child: Container(width: 16, height: 2, color: const Color(0xFFCCCCCC))) 
-                : Icon(icon, size: 32, color: const Color(0xFF333333)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(getThaiDate(day), style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openNewCheckIn,
+        backgroundColor: const Color(0xFF222222),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

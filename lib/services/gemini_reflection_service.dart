@@ -31,6 +31,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 
 import '../core/constants/moodmate_constants.dart';
 import '../models/reflection_result.dart';
+import '../models/weekly_insight.dart';
 import 'mock_reflection_service.dart';
 import 'reflection_service.dart';
 
@@ -68,7 +69,10 @@ class GeminiReflectionService implements ReflectionService {
   final Duration _timeout;
   final GenerateTextFn? _generateText;
   GenerativeModel? _model;
+  GenerativeModel? _insightModel;
   final void Function(String reason)? _onFallback;
+  final Map<String, String> _insightSummaryCache = {};
+  final Map<String, Future<String>> _pendingInsightSummaries = {};
 
   /// Fallback กลาง: บันทึกว่าง / สัญญาณเสี่ยงสูง / API มีปัญหา
   final ReflectionService _fallback = const MockReflectionService();
@@ -186,6 +190,88 @@ Positive Regard), เข้าใจจากมุมมองของผู�
     );
   }
 
+  @override
+  Future<String> summarizeInsight({required WeeklyInsight insight}) async {
+    final cacheKey = _insightCacheKey(insight);
+    final cached = _insightSummaryCache[cacheKey];
+    if (cached != null) return cached;
+
+    return _pendingInsightSummaries.putIfAbsent(cacheKey, () async {
+      try {
+        final summary = await _summarizeInsight(insight);
+        _insightSummaryCache[cacheKey] = summary;
+        return summary;
+      } finally {
+        _pendingInsightSummaries.remove(cacheKey);
+      }
+    });
+  }
+
+  Future<String> _summarizeInsight(WeeklyInsight insight) async {
+    if (insight.totalEntries == 0) {
+      return 'ช่วงเวลานี้ยังไม่มีบันทึก เมื่อคุณเริ่มเช็กอินอารมณ์ '
+          'ระบบจะแสดงสรุปแนวโน้มที่นี่';
+    }
+
+    if (_apiKey.trim().isEmpty && _generateText == null) {
+      throw const InsightSummaryException(
+        'ยังไม่ได้ตั้งค่า Gemini API key ให้รันแอปด้วย '
+        '--dart-define="GEMINI_API_KEY=คีย์ของคุณ"',
+      );
+    }
+
+    try {
+      final prompt = _buildInsightPrompt(insight);
+      final raw = await (_generateText ?? _generateInsightWithGemini)(
+        prompt,
+      ).timeout(_timeout);
+      final summary = raw?.trim();
+      if (summary == null || summary.isEmpty) {
+        throw const FormatException('empty_summary');
+      }
+      if (summary.length > 800) {
+        throw const FormatException('summary_too_long');
+      }
+      if (_violatesSafetyRules(summary)) {
+        throw const FormatException('unsafe_summary');
+      }
+      return summary;
+    } on TimeoutException {
+      _logInsightFailure('timeout');
+      throw const InsightSummaryException(
+        'Gemini ใช้เวลานานเกินไป ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+      );
+    } on GenerativeAIException catch (error) {
+      _logInsightFailure('GenerativeAIException:${error.runtimeType}');
+      throw const InsightSummaryException(
+        'เรียก Gemini ไม่สำเร็จ ตรวจสอบ API key หรือโควตาแล้วลองใหม่',
+      );
+    } on FormatException {
+      _logInsightFailure('invalid_summary');
+      throw const InsightSummaryException(
+        'Gemini ส่งสรุปกลับมาไม่ถูกต้อง กรุณาลองใหม่',
+      );
+    } on InsightSummaryException {
+      rethrow;
+    } catch (error) {
+      _logInsightFailure(error.runtimeType.toString());
+      throw const InsightSummaryException(
+        'สร้างสรุป AI ไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองใหม่',
+      );
+    }
+  }
+
+  String _insightCacheKey(WeeklyInsight insight) {
+    final moods = insight.moodCounts.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final contexts = insight.contextCounts.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return '${insight.weekStart.toIso8601String()}|'
+        '${insight.weekEnd.toIso8601String()}|${insight.totalEntries}|'
+        '${moods.map((entry) => '${entry.key}:${entry.value}').join(',')}|'
+        '${contexts.map((entry) => '${entry.key}:${entry.value}').join(',')}';
+  }
+
   // ---------------------------------------------------------------------------
   // Gemini setup
   // ---------------------------------------------------------------------------
@@ -205,6 +291,61 @@ Positive Regard), เข้าใจจากมุมมองของผู�
         maxOutputTokens: 1024,
         responseMimeType: 'application/json',
       ),
+    );
+  }
+
+  Future<String?> _generateInsightWithGemini(String prompt) async {
+    final response = await _getInsightModel().generateContent([
+      Content.text(prompt),
+    ]);
+    return response.text;
+  }
+
+  GenerativeModel _getInsightModel() {
+    return _insightModel ??= GenerativeModel(
+      model: _modelName,
+      apiKey: _apiKey,
+      systemInstruction: Content.system(
+        'คุณช่วยสรุปสถิติอารมณ์ส่วนบุคคลอย่างอ่อนโยนและไม่ตัดสิน '
+        'ตอบภาษาไทย 2-3 ประโยค อ้างอิงเฉพาะตัวเลขและข้อมูลสรุปที่ได้รับ '
+        'ห้ามเดาสาเหตุ ห้ามวินิจฉัยหรือให้คำแนะนำทางการแพทย์ '
+        'ห้ามขอหรือกล่าวถึงข้อมูลส่วนตัวที่ไม่มีในสถิติ',
+      ),
+      generationConfig: GenerationConfig(
+        temperature: 0.5,
+        maxOutputTokens: 300,
+      ),
+    );
+  }
+
+  String _buildInsightPrompt(WeeklyInsight insight) {
+    final endDate = DateTime(
+      insight.weekEnd.year,
+      insight.weekEnd.month,
+      insight.weekEnd.day - 1,
+    );
+    final moods = {
+      for (final entry in insight.moodCounts.entries)
+        MoodMateConstants.moodLabels[entry.key] ?? entry.key: entry.value,
+    };
+    return '''
+สรุปสถิติการเช็กอินของผู้ใช้ในช่วง ${_formatInsightDate(insight.weekStart)} ถึง ${_formatInsightDate(endDate)}
+จำนวนบันทึกทั้งหมด: ${insight.totalEntries}
+จำนวนอารมณ์: ${jsonEncode(moods)}
+จำนวนบริบท: ${jsonEncode(insight.contextCounts)}
+
+เขียนสรุปสั้น ๆ ว่าอารมณ์หรือบริบทใดพบมาก และชวนสังเกตแนวโน้มอย่างไม่ฟันธง
+ข้อมูลนี้เป็นสถิติรวมเท่านั้น ไม่มีข้อความ diary ของผู้ใช้
+''';
+  }
+
+  String _formatInsightDate(DateTime date) =>
+      '${date.day}/${date.month}/${date.year}';
+
+  void _logInsightFailure(String reason) {
+    developer.log(
+      'Gemini insight summary failed: $reason',
+      name: 'GeminiReflectionService',
     );
   }
 
