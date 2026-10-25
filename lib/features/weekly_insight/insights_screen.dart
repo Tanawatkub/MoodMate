@@ -89,7 +89,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white, borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Colors.black..withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
                 children: [

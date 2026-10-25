@@ -93,6 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'ออกจากระบบ', 
                     color: Colors.red, 
                     onTap: () {
+                      // TODO: เชื่อม AuthService.signOut()
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(

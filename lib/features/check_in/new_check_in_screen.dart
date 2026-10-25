@@ -119,7 +119,7 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
                       const Text('0 คำ', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: const Color(0xFFFDEADB).withOpacity(0.5), borderRadius: BorderRadius.circular(16)),
+                        decoration: BoxDecoration(color: const Color(0xFFFDEADB).withValues(alpha: 0.5), borderRadius: BorderRadius.circular(16)),
                         child: Row(
                           children: const [
                             Icon(Icons.lightbulb_outline, size: 14, color: Color(0xFFC48E66)),

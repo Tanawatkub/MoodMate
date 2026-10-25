@@ -141,7 +141,7 @@ class DiaryDetailScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                  boxShadow: [BoxShadow(color: Colors.black..withValues(alpha: 0.5), blurRadius: 10, offset: const Offset(0, 4))],
                   border: Border.all(color: const Color(0xFFFDEADB)),
                 ),
                 child: Column(
