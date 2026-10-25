@@ -18,6 +18,12 @@ class FirebaseAuthService implements AuthService {
       _auth.authStateChanges().map((user) => user?.uid);
 
   @override
+  String? get currentDisplayName {
+    final name = _auth.currentUser?.displayName;
+    return (name == null || name.isEmpty) ? null : name;
+  }
+
+  @override
   Future<void> signUp({
     required String email,
     required String password,
@@ -49,6 +55,28 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> signOut() => _auth.signOut();
+
+  @override
+  Future<void> updateDisplayName(String name) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AuthException('not-signed-in', 'ยังไม่ได้เข้าสู่ระบบ');
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw const AuthException('invalid-display-name', 'กรุณากรอกชื่อ');
+    }
+    if (trimmed.runes.length > AuthService.maxDisplayNameLength) {
+      throw const AuthException('invalid-display-name',
+          'ชื่อยาวเกินไป (ไม่เกิน ${AuthService.maxDisplayNameLength} ตัวอักษร)');
+    }
+    try {
+      await user.updateDisplayName(trimmed);
+      await user.reload(); // ให้ currentUser สะท้อนชื่อใหม่ทันที
+    } on FirebaseAuthException catch (e) {
+      throw _toAuthException(e);
+    }
+  }
 
   AuthException _toAuthException(FirebaseAuthException e) {
     switch (e.code) {
