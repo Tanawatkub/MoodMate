@@ -81,14 +81,17 @@ abstract class DiaryRepository {
 abstract class AuthService {
   String? get currentUserId;                 // null = ยังไม่ login
   Stream<String?> get userIdChanges;         // UID หรือ null เมื่อ logout
+  String? get currentDisplayName;            // ชื่อที่แสดง null = ยังไม่ตั้ง (UI ใช้ชื่อเริ่มต้นเอง)
   Future<void> signUp({required String email, required String password});
   Future<void> signIn({required String email, required String password});
   Future<void> signOut();
+  Future<void> updateDisplayName(String name);   // ตัดช่องว่างหัวท้าย ไม่ว่าง ไม่เกิน 50 ตัวอักษร
 }
 ```
 
 - วิธีเข้าสู่ระบบ: **Email/Password เท่านั้น** ไม่มีชื่อผู้ใช้ รหัสผ่านอย่างน้อย 6 ตัวอักษร (ข้อกำหนดของ Firebase)
 - `signUp` สำเร็จแล้ว login ให้ทันที
+- **ชื่อที่แสดง** เก็บกับบัญชีใน Firebase Authentication (`displayName`) ไม่ใช่ใน Firestore จึงไม่แตะ Security Rules ตามเข้าเครื่องอื่นเมื่อ login บัญชีเดิม ถ้ายังไม่ตั้ง `currentDisplayName` เป็น `null` และ UI ใช้ชื่อเริ่มต้นเอง ข้อมูลโปรไฟล์อื่นนอกจากชื่อยังไม่มีที่เก็บ
 - ข้อผิดพลาดทั้งหมดเป็น `AuthException(code, message)` โดย `message` เป็นภาษาไทยพร้อมแสดงบน UI
 
 | `code` | ความหมาย |
@@ -101,6 +104,8 @@ abstract class AuthService {
 | `too-many-requests` | ลองบ่อยเกินไป |
 | `network-request-failed` | เชื่อมต่ออินเทอร์เน็ตไม่ได้ |
 | `operation-not-allowed` | ยังไม่ได้เปิด Email/Password ใน Firebase |
+| `invalid-display-name` | ชื่อว่างหรือยาวเกิน 50 ตัวอักษร |
+| `not-signed-in` | เรียก `updateDisplayName` ตอนยังไม่ได้ login |
 | (อื่น ๆ) | ข้อความทั่วไป พร้อมรหัสเดิมของ Firebase |
 
 เมื่อ logout ต้องเคลียร์ข้อมูลที่ค้างบนหน้าจอ เพื่อไม่ให้ผู้ใช้ถัดไปเห็นข้อมูลเดิม
@@ -178,6 +183,7 @@ Future<void> main() async {
 | ความยาว Diary บน UI | ไม่จำกัด (Rules กันที่ 20,000 ตัวอักษร) |
 | การเรียงรายการ | ใหม่สุดก่อน |
 | ช่วงเวลา `getEntries` | `[from, to)` |
+| ที่เก็บชื่อผู้ใช้ | Firebase Authentication `displayName` (ไม่ใช้ Firestore) |
 | พฤติกรรมออฟไลน์ | ใช้แคชในตัว Firestore (ยังไม่ได้ทดสอบ ดูหัวข้อ 12.1) |
 | ช่วงเวลาของ Dashboard | 7 วันย้อนหลังจากวันนี้ ใช้เวลาของเครื่อง (รายละเอียดเป็นข้อเสนอ ดูหัวข้อ 12.2) |
 | Local database | ไม่ใช้ (ไม่ใช้ Hive/Isar/SQLite) ใช้เฉพาะแคชในตัว Firestore ดูหัวข้อ 12.3 |

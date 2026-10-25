@@ -9,6 +9,10 @@ abstract class AuthService {
   /// ส่งค่าใหม่ทุกครั้งที่สถานะ login เปลี่ยน (UID หรือ null เมื่อ logout)
   Stream<String?> get userIdChanges;
 
+  /// ชื่อที่แสดงของผู้ใช้ที่ login อยู่ (เก็บกับบัญชีใน Firebase Authentication)
+  /// null = ยังไม่ได้ตั้ง ให้ UI ใช้ชื่อเริ่มต้นเอง เช่น "ผู้ใช้งาน MoodMate"
+  String? get currentDisplayName;
+
   /// สมัครสมาชิกแล้ว login ให้ทันที
   /// โยน [AuthException] เมื่อผิดพลาด
   Future<void> signUp({required String email, required String password});
@@ -17,6 +21,14 @@ abstract class AuthService {
   Future<void> signIn({required String email, required String password});
 
   Future<void> signOut();
+
+  /// ตั้ง/แก้ชื่อที่แสดง ตัดช่องว่างหัวท้ายก่อนบันทึก
+  /// ชื่อต้องไม่ว่างและไม่เกิน [maxDisplayNameLength] ตัวอักษร (ข้อเสนอ ทีมยืนยันได้)
+  /// โยน [AuthException] เมื่อผิดพลาด เช่น code 'invalid-display-name', 'not-signed-in'
+  /// ชื่อเก็บถาวรกับบัญชี ไม่หายเมื่อปิดแอปหรือเปลี่ยนเครื่อง
+  Future<void> updateDisplayName(String name);
+
+  static const int maxDisplayNameLength = 50;
 }
 
 /// ข้อผิดพลาดด้านบัญชีที่ UI แสดงให้ผู้ใช้ได้เลย
