@@ -52,3 +52,7 @@ app.*.map.json
 **/service-account*.json
 test_direct.dart
 test_real_api.dart
+
+**/ephemeral/
+**/.plugin_symlinks/
+*/GeneratedPluginRegistrant.*
