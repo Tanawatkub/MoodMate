@@ -61,13 +61,14 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
             const Text('หยุดพักสักครู่ สังเกตความรู้สึกที่เกิดขึ้นในใจ', style: TextStyle(fontSize: 14, color: Color(0xFF666666))),
             const SizedBox(height: 24),
 
+            // แก้ไขค่าอารมณ์ทั้ง 4 ให้ตรงกับ Constants ตามที่เพื่อนคอมเมนต์ใน PR
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _buildMoodOption('มีความสุข', Icons.sentiment_satisfied_alt, const Color(0xFFFDEADB), 'happy'),
-                _buildMoodOption('สงบใจ', Icons.sentiment_neutral, const Color(0xFFEFECE2), 'neutral'),
-                _buildMoodOption('เฉยๆ', Icons.sentiment_neutral_outlined, const Color(0xFFE2ECF5), 'meh'),
-                _buildMoodOption('เหนื่อยล้า', Icons.sentiment_dissatisfied, const Color(0xFFF4C8C8), 'tired'),
+                _buildMoodOption('โกรธ', Icons.sentiment_very_dissatisfied, const Color(0xFFF4C8C8), 'angry'),
+                _buildMoodOption('เศร้า', Icons.sentiment_dissatisfied, const Color(0xFFE2ECF5), 'sad'),
+                _buildMoodOption('เฉยๆ', Icons.sentiment_neutral, const Color(0xFFEFECE2), 'neutral'),
               ],
             ),
             const SizedBox(height: 32),
@@ -159,7 +160,6 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
             ),
             const SizedBox(height: 40),
 
-            // ปุ่มบันทึกที่ถูกเพิ่มกลับมา
             SizedBox(
               width: double.infinity,
               height: 56,
