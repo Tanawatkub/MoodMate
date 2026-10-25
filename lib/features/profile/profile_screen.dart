@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
-// import 'edit_profile_screen.dart'; // อย่าลืม import หน้าแก้ไขโปรไฟล์ของคุณตรงนี้
+import '../auth/login_screen.dart';
+import 'edit_profile_screen.dart'; 
 
 class ProfileScreen extends StatefulWidget {
   final AppDependencies dependencies;
@@ -11,25 +12,17 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String userName = "ผู้ใช้งาน MoodMate"; // ตัวแปรเก็บชื่อ
-  String userId = "MgyvNYiXDffQpDuKshX3kx8aidv2"; // ตัวแปรเก็บ ID
+  String userName = "ผู้ใช้งาน MoodMate"; 
+  String userId = "MgyvNYiXDffQpDuKshX3kx8aldv2";
 
   @override
   void initState() {
     super.initState();
-    _loadUserData(); // โหลดข้อมูลครั้งแรกตอนเปิดหน้า
+    _loadUserData();
   }
 
-  // ฟังก์ชันจำลองการโหลดข้อมูลล่าสุด (ถ้ามี Firebase ให้ดึงจาก Firebase ตรงนี้)
   Future<void> _loadUserData() async {
-    // ตัวอย่างการดึงข้อมูล: 
-    // final user = FirebaseAuth.instance.currentUser;
-    // await user?.reload();
-    // userName = user?.displayName ?? "ผู้ใช้งาน MoodMate";
-    
-    setState(() {
-      // อัปเดตข้อมูลบนหน้าจอ
-    });
+    // ในอนาคตจะดึงข้อมูลจาก Firebase ตรงนี้
   }
 
   @override
@@ -55,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 24),
+            // ชื่อตรงนี้จะเปลี่ยนไปตามตัวแปร userName
             Text(userName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
             const SizedBox(height: 8),
             Text(userId, style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
@@ -64,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
                 children: [
@@ -72,14 +66,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.edit_outlined, 
                     title: 'แก้ไขโปรไฟล์',
                     onTap: () async {
-                      // สมมติว่าเปิดหน้า EditProfileScreen
-                      /* 
-                      await Navigator.push(
+                      // รอรับค่าชื่อใหม่ที่ส่งกลับมาจากหน้า EditProfileScreen
+                      final result = await Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => EditProfileScreen(dependencies: widget.dependencies)),
+                        MaterialPageRoute(
+                          builder: (context) => EditProfileScreen(dependencies: widget.dependencies),
+                        ),
                       );
-                      */
-                      // รอจนแก้ข้อมูลเสร็จ พอกลับมาหน้านี้ จะโหลดข้อมูลชื่อล่าสุดมาแสดงใหม่
+                      
+                      // ถ้ามีค่าส่งกลับมา (ไม่เป็น null) และมีข้อความ ให้เปลี่ยนชื่อบนจอ
+                      if (result != null && result is String && result.isNotEmpty) {
+                        setState(() {
+                          userName = result;
+                        });
+                      }
                       await _loadUserData(); 
                     }
                   ),
@@ -88,7 +88,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Divider(height: 1, color: Color(0xFFEFECE2)),
                   _buildMenuRow(icon: Icons.lock_outline, title: 'ความเป็นส่วนตัว', onTap: () {}),
                   const Divider(height: 1, color: Color(0xFFEFECE2)),
-                  _buildMenuRow(icon: Icons.logout, title: 'ออกจากระบบ', color: Colors.red, onTap: () {}),
+                  _buildMenuRow(
+                    icon: Icons.logout, 
+                    title: 'ออกจากระบบ', 
+                    color: Colors.red, 
+                    onTap: () {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LoginScreen(dependencies: widget.dependencies),
+                        ),
+                        (route) => false,
+                      );
+                    }
+                  ),
                 ],
               ),
             ),

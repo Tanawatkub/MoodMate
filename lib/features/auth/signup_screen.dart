@@ -11,10 +11,35 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
 
-  final TextEditingController _passwordController = TextEditingController();
+  // ฟังก์ชันตรวจสอบรหัสผ่านด้วย Regex (ขั้นต่ำ 8 ตัว, มีพิมพ์เล็ก, พิมพ์ใหญ่, ตัวเลข, อักขระพิเศษ)
+  bool _isPasswordValid(String password) {
+    final regex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$');
+    return regex.hasMatch(password);
+  }
+
+  void _handleSignup() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      
+      // TODO: ใส่ Logic สมัครสมาชิกกับ Firebase ของคุณตรงนี้
+      await Future.delayed(const Duration(seconds: 1)); // จำลองการโหลด
+      
+      if (mounted) {
+        setState(() => _isLoading = false);
+        // เมื่อสมัครเสร็จ สามารถเด้งกลับไปหน้า Login หรือไปหน้า Home ได้เลย
+        Navigator.pop(context); 
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,164 +49,143 @@ class _SignupScreenState extends State<SignupScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF222222), size: 20),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF222222)),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 24, top: 12, bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFECE2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            alignment: Alignment.center,
-            child: Row(
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFF4B886), shape: BoxShape.circle)),
-                const SizedBox(width: 6),
-                const Text('ขั้นตอน 1 จาก 1', style: TextStyle(fontSize: 12, color: Color(0xFF666666), fontWeight: FontWeight.bold)),
+                // เอาป้าย "ขั้นตอน 1 จาก 1" ออกจากตรงนี้แล้ว
+                const Text('สร้างบัญชีใหม่', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
+                const SizedBox(height: 8),
+                const Text('เริ่มต้นบันทึกอารมณ์และดูแลใจไปกับ MoodMate', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
+                const SizedBox(height: 40),
+
+                // ช่องกรอกชื่อ
+                _buildTextField(
+                  controller: _nameController,
+                  hintText: 'ชื่อผู้ใช้งาน',
+                  icon: Icons.person_outline,
+                  validator: (value) => value!.isEmpty ? 'กรุณากรอกชื่อผู้ใช้งาน' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // ช่องกรอกอีเมล
+                _buildTextField(
+                  controller: _emailController,
+                  hintText: 'อีเมล',
+                  icon: Icons.mail_outline,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'กรุณากรอกอีเมล';
+                    if (!value.contains('@')) return 'รูปแบบอีเมลไม่ถูกต้อง';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // ช่องกรอกรหัสผ่าน
+                _buildTextField(
+                  controller: _passwordController,
+                  hintText: 'รหัสผ่าน (8+ ตัวอักษร, พิมพ์ใหญ่, เล็ก, พิเศษ)',
+                  icon: Icons.lock_outline,
+                  obscureText: _obscurePassword,
+                  onToggleVisibility: () => setState(() => _obscurePassword = !_obscurePassword),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'กรุณากรอกรหัสผ่าน';
+                    if (!_isPasswordValid(value)) {
+                      return 'ต้องมี 8+ ตัวอักษร, พิมพ์เล็ก, ใหญ่, ตัวเลข และอักขระพิเศษ';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // ช่องยืนยันรหัสผ่าน
+                _buildTextField(
+                  controller: _confirmPasswordController,
+                  hintText: 'ยืนยันรหัสผ่าน',
+                  icon: Icons.lock_outline,
+                  obscureText: _obscureConfirmPassword,
+                  onToggleVisibility: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'กรุณายืนยันรหัสผ่าน';
+                    if (value != _passwordController.text) return 'รหัสผ่านไม่ตรงกัน';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 40),
+
+                // ปุ่มสมัครสมาชิก
+                SizedBox(
+                  width: double.infinity, height: 56,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleSignup,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF222222),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                    ),
+                    child: _isLoading 
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('สมัครสมาชิก', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // ปุ่มกลับไปหน้า Login
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('มีบัญชีอยู่แล้ว? ', style: TextStyle(color: Color(0xFF666666))),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Text('เข้าสู่ระบบ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF222222), decoration: TextDecoration.underline)),
+                    ),
+                  ],
+                ),
               ],
             ),
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 80, height: 80,
-                decoration: const BoxDecoration(color: Color(0xFFFDEADB), shape: BoxShape.circle),
-                child: const Icon(Icons.sentiment_satisfied_alt, size: 40, color: Color(0xFF333333)),
-              ),
-              const SizedBox(height: 24),
-              const Text('เริ่มต้นกับ MoodMate', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
-              const SizedBox(height: 8),
-              const Text('สร้างพื้นที่ปลอดภัยสำหรับใจของคุณวันนี้', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
-              const SizedBox(height: 40),
-
-              // ชื่อผู้ใช้งาน
-              _buildTextField(hint: 'ชื่อผู้ใช้งาน', icon: Icons.person_outline),
-              const SizedBox(height: 16),
-              
-              // อีเมล
-              _buildTextField(hint: 'อีเมล', icon: Icons.mail_outline, keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 16),
-
-              // รหัสผ่าน (แก้ไข Hint และเพิ่ม Validator)
-              TextFormField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFEFECE2),
-                  hintText: 'รหัสผ่าน (ขั้นต่ำ 8 ตัว, พิมพ์เล็ก, พิมพ์ใหญ่, อักขระพิเศษ)', // อัปเดตข้อความ
-                  hintStyle: const TextStyle(color: Color(0xFF888888), fontSize: 13),
-                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF888888)),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: const Color(0xFF888888)),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'กรุณากรอกรหัสผ่าน';
-                  // เช็คเงื่อนไข: ความยาว >= 8, มีตัวพิมพ์เล็ก, ตัวพิมพ์ใหญ่ และอักขระพิเศษ
-                  if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\W).{8,}$').hasMatch(value)) {
-                    return 'ต้องมี 8 ตัวอักษรขึ้นไป ประกอบด้วยพิมพ์เล็ก พิมพ์ใหญ่ และอักขระพิเศษ';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // ยืนยันรหัสผ่าน
-              TextFormField(
-                obscureText: _obscureConfirmPassword,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFFEFECE2),
-                  hintText: 'ยืนยันรหัสผ่าน',
-                  hintStyle: const TextStyle(color: Color(0xFF888888), fontSize: 14),
-                  prefixIcon: const Icon(Icons.replay_outlined, color: Color(0xFF888888)),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: const Color(0xFF888888)),
-                    onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                  ),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
-                validator: (value) {
-                  if (value != _passwordController.text) return 'รหัสผ่านไม่ตรงกัน';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 32),
-
-              // ปุ่มสมัคร
-              SizedBox(
-                width: double.infinity, height: 56,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // TODO: ทำงานต่อเมื่อผ่านเงื่อนไขรหัสผ่านแล้ว
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF222222),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text('สมัครสมาชิก', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('มีบัญชีอยู่แล้ว? ', style: TextStyle(color: Color(0xFF666666))),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Text('เข้าสู่ระบบ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF222222), decoration: TextDecoration.underline)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.shield_outlined, size: 14, color: Color(0xFF888888)),
-                  SizedBox(width: 6),
-                  Text('ข้อมูลปลอดภัยและเป็นส่วนตัวเสมอ', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                ],
-              ),
-            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTextField({required String hint, required IconData icon, TextInputType? keyboardType}) {
+  // Widget ช่วยสร้างช่องกรอกข้อมูลให้โค้ดคลีนขึ้น
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+    bool obscureText = false,
+    TextInputType? keyboardType,
+    VoidCallback? onToggleVisibility,
+    String? Function(String?)? validator,
+  }) {
     return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
       keyboardType: keyboardType,
+      style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         filled: true, fillColor: const Color(0xFFEFECE2),
-        hintText: hint, hintStyle: const TextStyle(color: Color(0xFF888888), fontSize: 14),
+        hintText: hintText, hintStyle: const TextStyle(color: Color(0xFF888888), fontSize: 13),
         prefixIcon: Icon(icon, color: const Color(0xFF888888)),
+        suffixIcon: onToggleVisibility != null
+            ? IconButton(
+                icon: Icon(obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: const Color(0xFF888888)),
+                onPressed: onToggleVisibility,
+              )
+            : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       ),
-      validator: (value) => value!.isEmpty ? 'กรุณากรอกข้อมูล' : null,
+      validator: validator,
     );
   }
 }
