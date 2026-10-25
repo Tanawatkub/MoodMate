@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
+import 'auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   final AppDependencies dependencies;
@@ -14,7 +15,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -22,23 +24,44 @@ class _SignupScreenState extends State<SignupScreen> {
 
   // ฟังก์ชันตรวจสอบรหัสผ่านด้วย Regex (ขั้นต่ำ 8 ตัว, มีพิมพ์เล็ก, พิมพ์ใหญ่, ตัวเลข, อักขระพิเศษ)
   bool _isPasswordValid(String password) {
-    final regex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$');
+    final regex = RegExp(
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$',
+    );
     return regex.hasMatch(password);
   }
 
-  void _handleSignup() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      
-      // TODO: ใส่ Logic สมัครสมาชิกกับ Firebase ของคุณตรงนี้
-      await Future.delayed(const Duration(seconds: 1)); // จำลองการโหลด
-      
+  Future<void> _handleSignup() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await widget.dependencies.auth.signUp(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+      await widget.dependencies.auth.updateDisplayName(_nameController.text);
+
       if (mounted) {
-        setState(() => _isLoading = false);
-        // เมื่อสมัครเสร็จ สามารถเด้งกลับไปหน้า Login หรือไปหน้า Home ได้เลย
-        Navigator.pop(context); 
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
+    } on AuthException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -62,9 +85,19 @@ class _SignupScreenState extends State<SignupScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // เอาป้าย "ขั้นตอน 1 จาก 1" ออกจากตรงนี้แล้ว
-                const Text('สร้างบัญชีใหม่', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF222222))),
+                const Text(
+                  'สร้างบัญชีใหม่',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF222222),
+                  ),
+                ),
                 const SizedBox(height: 8),
-                const Text('เริ่มต้นบันทึกอารมณ์และดูแลใจไปกับ MoodMate', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
+                const Text(
+                  'เริ่มต้นบันทึกอารมณ์และดูแลใจไปกับ MoodMate',
+                  style: TextStyle(fontSize: 14, color: Color(0xFF888888)),
+                ),
                 const SizedBox(height: 40),
 
                 // ช่องกรอกชื่อ
@@ -72,7 +105,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _nameController,
                   hintText: 'ชื่อผู้ใช้งาน',
                   icon: Icons.person_outline,
-                  validator: (value) => value!.isEmpty ? 'กรุณากรอกชื่อผู้ใช้งาน' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'กรุณากรอกชื่อผู้ใช้งาน' : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -96,9 +130,12 @@ class _SignupScreenState extends State<SignupScreen> {
                   hintText: 'รหัสผ่าน (8+ ตัวอักษร, พิมพ์ใหญ่, เล็ก, พิเศษ)',
                   icon: Icons.lock_outline,
                   obscureText: _obscurePassword,
-                  onToggleVisibility: () => setState(() => _obscurePassword = !_obscurePassword),
+                  onToggleVisibility: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'กรุณากรอกรหัสผ่าน';
+                    if (value == null || value.isEmpty) {
+                      return 'กรุณากรอกรหัสผ่าน';
+                    }
                     if (!_isPasswordValid(value)) {
                       return 'ต้องมี 8+ ตัวอักษร, พิมพ์เล็ก, ใหญ่, ตัวเลข และอักขระพิเศษ';
                     }
@@ -113,10 +150,16 @@ class _SignupScreenState extends State<SignupScreen> {
                   hintText: 'ยืนยันรหัสผ่าน',
                   icon: Icons.lock_outline,
                   obscureText: _obscureConfirmPassword,
-                  onToggleVisibility: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                  onToggleVisibility: () => setState(
+                    () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                  ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'กรุณายืนยันรหัสผ่าน';
-                    if (value != _passwordController.text) return 'รหัสผ่านไม่ตรงกัน';
+                    if (value == null || value.isEmpty) {
+                      return 'กรุณายืนยันรหัสผ่าน';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'รหัสผ่านไม่ตรงกัน';
+                    }
                     return null;
                   },
                 ),
@@ -124,17 +167,34 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 // ปุ่มสมัครสมาชิก
                 SizedBox(
-                  width: double.infinity, height: 56,
+                  width: double.infinity,
+                  height: 56,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _handleSignup,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF222222),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                      ),
                     ),
-                    child: _isLoading 
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('สมัครสมาชิก', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'สมัครสมาชิก',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -143,10 +203,20 @@ class _SignupScreenState extends State<SignupScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('มีบัญชีอยู่แล้ว? ', style: TextStyle(color: Color(0xFF666666))),
+                    const Text(
+                      'มีบัญชีอยู่แล้ว? ',
+                      style: TextStyle(color: Color(0xFF666666)),
+                    ),
                     GestureDetector(
                       onTap: () => Navigator.pop(context),
-                      child: const Text('เข้าสู่ระบบ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF222222), decoration: TextDecoration.underline)),
+                      child: const Text(
+                        'เข้าสู่ระบบ',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF222222),
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -174,16 +244,26 @@ class _SignupScreenState extends State<SignupScreen> {
       keyboardType: keyboardType,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
-        filled: true, fillColor: const Color(0xFFEFECE2),
-        hintText: hintText, hintStyle: const TextStyle(color: Color(0xFF888888), fontSize: 13),
+        filled: true,
+        fillColor: const Color(0xFFEFECE2),
+        hintText: hintText,
+        hintStyle: const TextStyle(color: Color(0xFF888888), fontSize: 13),
         prefixIcon: Icon(icon, color: const Color(0xFF888888)),
         suffixIcon: onToggleVisibility != null
             ? IconButton(
-                icon: Icon(obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: const Color(0xFF888888)),
+                icon: Icon(
+                  obscureText
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: const Color(0xFF888888),
+                ),
                 onPressed: onToggleVisibility,
               )
             : null,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
       ),
       validator: validator,
     );
