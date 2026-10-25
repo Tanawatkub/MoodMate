@@ -4,7 +4,7 @@
 > ใช้ร่วมกับ `MOODMATE_PROJECT_CONTEXT.md` และ `MOODMATE_PROJECT_GIT.md` (สัญญากลางของ `ReflectionService`, `ReflectionResult`, `WeeklyInsight` อยู่ใน `MOODMATE_PROJECT_GIT.md` หัวข้อ 4-5)
 > **กติกา:** ห้ามเปลี่ยนชื่อไฟล์ class method field หรือค่าที่เก็บในเอกสารนี้โดยไม่คุยทีม หากเปลี่ยน ต้องแก้เอกสารนี้ `firestore.rules` และทุกส่วนที่เชื่อมต่อในงานเดียวกัน
 
-อัปเดตล่าสุด: 24 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
+อัปเดตล่าสุด: 25 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
 
 ---
 
@@ -154,9 +154,10 @@ Future<void> main() async {
 
 ## 8. สถานะการทดสอบ
 
-ทดสอบบน Android emulator (API 34) กับ Firebase จริง เมื่อ 24 ต.ค. 2026 ด้วยสคริปต์ชั่วคราว ผ่าน 25 จาก 25 เคส:
+ทดสอบบน Android emulator (API 34) กับ Firebase จริง ด้วยสคริปต์ชั่วคราว (`lib/dev/firebase_smoke_main.dart`) รอบล่าสุดเมื่อ 25 ต.ค. 2026 ผ่าน 32 จาก 32 เคส:
 
 - **AuthService:** สมัคร, อีเมลซ้ำ, รหัสผิด, รหัสสั้น, login
+- **Display name:** ยังไม่ตั้ง → `null`, ตัดช่องว่างหัวท้าย, คงอยู่หลัง logout/login, ชื่อว่าง และชื่อเกิน 50 → `invalid-display-name`, ยังไม่ login → `not-signed-in`
 - **FirestoreDiaryRepository:** สร้าง/อ่าน/แก้/ลบ, ช่วงเวลา `[from, to)`, diary ว่าง, เรียงใหม่สุดก่อน, แก้รายการที่ไม่มี → `StateError`
 - **Rules ปฏิเสธข้อมูลผิดรูปแบบ:** mood/tag นอกรายการ, field เกิน, `userId` ไม่ตรง, diary เกินเพดาน (ทดสอบด้วยอักษรอังกฤษ), แก้ `createdAt`
 - **Rules ข้ามบัญชี:** ผู้ใช้ B อ่าน/เขียน/แก้/ลบของ A ไม่ได้ แต่ใช้ของตัวเองได้
@@ -169,6 +170,7 @@ Future<void> main() async {
 
 - **API key ของ Firebase** ใน `google-services.json` และ `lib/firebase_options.dart` ไม่ใช่ความลับระดับ admin (ข้อมูลปกป้องด้วย Security Rules) และถูกจำกัดเหลือ 3 API: Cloud Firestore, Identity Toolkit, Token Service **ถ้าเพิ่มบริการ Firebase/Google อื่น ต้องเพิ่ม API ในข้อจำกัดของคีย์ด้วย** ไม่เช่นนั้นจะถูกบล็อก
 - **ห้าม commit:** service account, `.env` ที่มีค่าจริง, Gemini API key (ควรเป็นคีย์แยกจากคีย์ Firebase)
+- **Gemini API key** ส่งผ่าน `--dart-define=GEMINI_API_KEY=...` ตอนรัน ไม่อยู่ในไฟล์ แต่ค่านี้ถูกคอมไพล์รวมใน APK และดึงออกได้ ใช้ได้เฉพาะช่วงพัฒนาและเดโมในทีม ถ้าแจก APK ให้คนนอกทีมทดสอบ ต้องตั้งโควตา/จำกัดคีย์ หรือเปลี่ยนวิธีก่อน
 - **ห้าม log** `diaryText`, อีเมล, รหัสผ่าน, token
 - แก้ Rules: แก้ `firestore.rules` แล้ว `firebase deploy --only firestore:rules --project moodmate-15d92` และทดสอบก่อนเสมอ
 - ข้อมูลตอนพัฒนาใช้ Firebase project เดียวกันทั้งทีม แต่ละคนใช้บัญชีทดสอบของตัวเอง ข้อมูลแยกตาม UID
