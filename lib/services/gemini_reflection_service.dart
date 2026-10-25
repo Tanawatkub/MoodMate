@@ -55,7 +55,7 @@ class GeminiReflectionService implements ReflectionService {
   /// ⚠️ เอกสารโครงการยังไม่ได้ระบุชื่อ Gemini model — ทีมต้องยืนยันก่อนใช้จริง
   /// ชื่อนี้ผู้พัฒนาทดสอบยิง SDK ตรงแล้วใช้ได้ (24 ต.ค. 2026) แต่ยังไม่ได้ยืนยันกับทีม
   /// เปลี่ยนได้ผ่าน constructor โดยไม่ต้องแก้ไฟล์นี้
-  static const String defaultModelName = 'gemini-3.8-flash';
+  static const String defaultModelName = 'gemini-3.5-flash-lite';
 
   /// จำกัดความยาวบันทึกที่ส่งไป AI (ป้องกัน prompt ยาวเกิน / ค่าใช้จ่ายสูง)
   static const int maxDiaryChars = 4000;
