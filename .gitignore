@@ -50,3 +50,7 @@ app.*.map.json
 *.env
 !.env.example
 **/service-account*.json
+
+**/ephemeral/
+**/.plugin_symlinks/
+*/GeneratedPluginRegistrant.*
