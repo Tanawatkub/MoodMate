@@ -45,7 +45,7 @@ class WeeklyInsightPage extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('สรุปรายสัปดาห์')),
+      appBar: AppBar(title: const Text('สรุป 7 วันล่าสุด')),
       body: insight.totalEntries == 0
           ? const _EmptyView()
           : ListView(
@@ -65,13 +65,22 @@ class WeeklyInsightPage extends StatelessWidget {
                         Text('บันทึกทั้งหมด ${insight.totalEntries} ครั้ง'),
                         const SizedBox(height: 4),
                         Text('อารมณ์ที่บันทึกบ่อยที่สุด: ${_topMoodText()}'),
+                                                if (insight.totalEntries < weeklyInsightMinEntries) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'ข้อมูลยังไม่เพียงพอ (มี ${insight.totalEntries} '
+                            'จากอย่างน้อย $weeklyInsightMinEntries รายการ) '
+                            'ภาพรวมนี้อาจยังไม่สะท้อนแนวโน้มจริง',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 _CountSection(
-                  title: 'อารมณ์ในสัปดาห์นี้',
+                  title: 'อารมณ์ใน 7 วันล่าสุด',
                   keys: weeklyInsightMoods,
                   labels: weeklyInsightMoodLabels,
                   counts: insight.moodCounts,
@@ -104,7 +113,7 @@ class _EmptyView extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.all(24),
         child: Text(
-          'ยังไม่มีบันทึกในสัปดาห์นี้',
+          'ยังไม่มีบันทึกใน 7 วันล่าสุด',
           textAlign: TextAlign.center,
         ),
       ),

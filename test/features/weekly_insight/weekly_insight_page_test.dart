@@ -24,7 +24,7 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(home: WeeklyInsightPage(insight: empty)));
 
-    expect(find.text('ยังไม่มีบันทึกในสัปดาห์นี้'), findsOneWidget);
+    expect(find.text('ยังไม่มีบันทึกใน 7 วันล่าสุด'), findsOneWidget);
   });
 
   testWidgets('แสดงข้อมูลสรุปเมื่อมีบันทึก', (tester) async {

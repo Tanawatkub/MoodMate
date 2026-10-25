@@ -35,7 +35,7 @@ class _WeeklyInsightScreenState extends State<WeeklyInsightScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
-            appBar: AppBar(title: const Text('สรุปรายสัปดาห์')),
+            appBar: AppBar(title: const Text('สรุป 7 วันล่าสุด')),
             body: const Center(child: CircularProgressIndicator()),
           );
         }
