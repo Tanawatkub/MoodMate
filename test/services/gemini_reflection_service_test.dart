@@ -13,6 +13,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:moodmate/core/constants/moodmate_constants.dart';
 import 'package:moodmate/models/mood_entry.dart';
 import 'package:moodmate/models/reflection_result.dart';
+import 'package:moodmate/models/weekly_insight.dart';
 import 'package:moodmate/services/gemini_reflection_service.dart';
 import 'package:moodmate/services/mock_reflection_service.dart';
 import 'package:moodmate/services/reflection_service.dart';
@@ -150,6 +151,62 @@ void main() {
 
       expect(r.reflectionText, 'สะท้อนข้อความ');
       expect(r.suggestedAction, 'พักสายตา');
+    });
+
+    group('dashboard summary', () {
+      test(
+        'summarizes aggregate stats using the same Gemini service',
+        () async {
+          final model = _FakeModel(
+            (_) async => _textResponse(
+              'อารมณ์ยิ้มพบมากที่สุด ลองสังเกตสิ่งที่ช่วยให้รู้สึกดี',
+            ),
+          );
+          final service = _service(model);
+          final insight = WeeklyInsight(
+            weekStart: DateTime(2026, 10, 19),
+            weekEnd: DateTime(2026, 10, 26),
+            totalEntries: 3,
+            moodCounts: {'happy': 2, 'sad': 1},
+            contextCounts: {'Project': 2},
+          );
+
+          final summary = await service.summarizeInsight(insight: insight);
+
+          expect(summary, contains('อารมณ์ยิ้ม'));
+          expect(model.callCount, 1);
+          expect(model.lastPrompt, contains('จำนวนบันทึกทั้งหมด: 3'));
+          expect(model.lastPrompt, contains('Project'));
+          expect(
+            model.lastPrompt,
+            isNot(contains('รู้สึกกดดันกับงานที่ต้องส่ง')),
+          );
+          final cachedSummary = await service.summarizeInsight(
+            insight: insight,
+          );
+          expect(cachedSummary, summary);
+          expect(model.callCount, 1);
+        },
+      );
+
+      test(
+        'surfaces missing API key instead of showing a fake AI result',
+        () async {
+          final service = GeminiReflectionService(apiKey: '');
+          final insight = WeeklyInsight(
+            weekStart: DateTime(2026, 10, 19),
+            weekEnd: DateTime(2026, 10, 26),
+            totalEntries: 1,
+            moodCounts: {'happy': 1},
+            contextCounts: {},
+          );
+
+          await expectLater(
+            service.summarizeInsight(insight: insight),
+            throwsA(isA<InsightSummaryException>()),
+          );
+        },
+      );
     });
 
     test('ไม่มี suggestedAction ใน JSON → ใช้ micro-action ตาม mood', () async {

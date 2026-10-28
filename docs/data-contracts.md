@@ -4,7 +4,7 @@
 > ใช้ร่วมกับ `MOODMATE_PROJECT_CONTEXT.md` และ `MOODMATE_PROJECT_GIT.md` (สัญญากลางของ `ReflectionService`, `ReflectionResult`, `WeeklyInsight` อยู่ใน `MOODMATE_PROJECT_GIT.md` หัวข้อ 4-5)
 > **กติกา:** ห้ามเปลี่ยนชื่อไฟล์ class method field หรือค่าที่เก็บในเอกสารนี้โดยไม่คุยทีม หากเปลี่ยน ต้องแก้เอกสารนี้ `firestore.rules` และทุกส่วนที่เชื่อมต่อในงานเดียวกัน
 
-อัปเดตล่าสุด: 24 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
+อัปเดตล่าสุด: 25 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
 
 ---
 
@@ -82,8 +82,10 @@ abstract class AuthService {
   String? get currentUserId;                 // null = ยังไม่ login
   Stream<String?> get userIdChanges;         // UID หรือ null เมื่อ logout
   String? get currentDisplayName;            // ชื่อที่แสดง null = ยังไม่ตั้ง (UI ใช้ชื่อเริ่มต้นเอง)
+  DateTime? get currentUserCreatedAt;        // วันสร้างบัญชี; null = ไม่มี metadata
   Future<void> signUp({required String email, required String password});
   Future<void> signIn({required String email, required String password});
+  Future<void> sendPasswordResetEmail({required String email});
   Future<void> signOut();
   Future<void> updateDisplayName(String name);   // ตัดช่องว่างหัวท้าย ไม่ว่าง ไม่เกิน 50 ตัวอักษร
 }
@@ -91,7 +93,9 @@ abstract class AuthService {
 
 - วิธีเข้าสู่ระบบ: **Email/Password เท่านั้น** ไม่มีชื่อผู้ใช้ รหัสผ่านอย่างน้อย 6 ตัวอักษร (ข้อกำหนดของ Firebase)
 - `signUp` สำเร็จแล้ว login ให้ทันที
+- `sendPasswordResetEmail` ส่งลิงก์รีเซ็ตรหัสผ่านผ่าน Firebase Authentication
 - **ชื่อที่แสดง** เก็บกับบัญชีใน Firebase Authentication (`displayName`) ไม่ใช่ใน Firestore จึงไม่แตะ Security Rules ตามเข้าเครื่องอื่นเมื่อ login บัญชีเดิม ถ้ายังไม่ตั้ง `currentDisplayName` เป็น `null` และ UI ใช้ชื่อเริ่มต้นเอง ข้อมูลโปรไฟล์อื่นนอกจากชื่อยังไม่มีที่เก็บ
+- `currentUserCreatedAt` อ่านวันสร้างบัญชีจาก Firebase Auth metadata; หน้า Home แสดงวันในปฏิทินย้อนหลังไม่เกิน 30 วัน และไม่แสดงวันก่อนวันที่สมัคร
 - ข้อผิดพลาดทั้งหมดเป็น `AuthException(code, message)` โดย `message` เป็นภาษาไทยพร้อมแสดงบน UI
 
 | `code` | ความหมาย |
@@ -120,7 +124,11 @@ Future<void> main() async {
 }
 ```
 
-หน้าจอรับ `AppDependencies` (`auth`, `diary`) แล้วเรียกผ่าน interface ระหว่างพัฒนา UI ใช้ `MockDiaryRepository(sampleUserId: 'mock-user')` แทนได้ที่จุดนี้จุดเดียว
+หน้าจอรับ `AppDependencies` (`auth`, `diary`, `reflection`) แล้วเรียกผ่าน interface ระหว่างพัฒนา UI ใช้ `MockDiaryRepository(sampleUserId: 'mock-user')` แทนได้ที่จุดนี้จุดเดียว
+
+`GeminiReflectionService` ใช้ `GEMINI_API_KEY` จาก compile-time environment สำหรับทั้งการสะท้อนบันทึกและสรุปสถิติ โดยหน้าสถิติส่งเฉพาะจำนวนรวม อารมณ์/บริบทที่นับแล้ว และช่วงวันที่ให้ Gemini ไม่ส่งเนื้อหา diary; สรุปจะสร้างอัตโนมัติเมื่อข้อมูลช่วงนั้นโหลดเสร็จหรือเมื่อเปลี่ยนช่วงเวลา หาก key หรือ API ใช้ไม่ได้จะแสดงข้อผิดพลาดและให้ลองใหม่ ส่วนการสะท้อนบันทึกยังใช้ fallback ที่มีอยู่ใน service ได้ ห้าม commit API key และไม่ควรฝังคีย์ Gemini ในแอปที่เผยแพร่จริงเพราะดึงจาก binary ได้
+
+ก่อนส่ง diary ไปยัง Gemini UI ต้องแจ้งผู้ใช้และให้ผู้ใช้ยืนยันก่อน เนื่องจากบันทึกเป็นข้อมูลส่วนตัว; สรุปสถิติใช้ข้อมูล aggregate โดยไม่ส่ง diary text
 
 ## 7. โครงสร้างบน Cloud Firestore
 
