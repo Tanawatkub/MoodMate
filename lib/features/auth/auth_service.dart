@@ -13,12 +13,18 @@ abstract class AuthService {
   /// null = ยังไม่ได้ตั้ง ให้ UI ใช้ชื่อเริ่มต้นเอง เช่น "ผู้ใช้งาน MoodMate"
   String? get currentDisplayName;
 
+  /// วันและเวลาที่บัญชีปัจจุบันถูกสร้าง ใช้ null เมื่อไม่มี metadata
+  DateTime? get currentUserCreatedAt;
+
   /// สมัครสมาชิกแล้ว login ให้ทันที
   /// โยน [AuthException] เมื่อผิดพลาด
   Future<void> signUp({required String email, required String password});
 
   /// โยน [AuthException] เมื่อผิดพลาด
   Future<void> signIn({required String email, required String password});
+
+  /// ส่งลิงก์ตั้งรหัสผ่านใหม่ไปยังอีเมล
+  Future<void> sendPasswordResetEmail({required String email});
 
   Future<void> signOut();
 

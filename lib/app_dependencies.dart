@@ -20,12 +20,11 @@ class AppDependencies {
   final ReflectionService reflection;
 
   /// ตัวจริง (Firebase) ต้องเรียก Firebase.initializeApp ใน main() ก่อน
-  /// Gemini key ส่งตอนรันด้วย --dart-define=GEMINI_API_KEY=... (ไม่มี key = ใช้ข้อความสำรอง)
   factory AppDependencies.firebase() => AppDependencies(
-        auth: FirebaseAuthService(),
-        diary: FirestoreDiaryRepository(),
-        reflection: GeminiReflectionService(
-          apiKey: const String.fromEnvironment('GEMINI_API_KEY'),
-        ),
-      );
+    auth: FirebaseAuthService(),
+    diary: FirestoreDiaryRepository(),
+    reflection: GeminiReflectionService(
+      apiKey: const String.fromEnvironment('GEMINI_API_KEY'),
+    ),
+  );
 }
