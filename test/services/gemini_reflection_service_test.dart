@@ -136,6 +136,7 @@ void main() {
         expect(model.callCount, 1);
         expect(r.reflectionText, 'ฟังดูเหมือนงานที่ต้องส่งกำลังกดดันอยู่');
         expect(r.suggestedAction, 'ลองดื่มน้ำสักแก้ว');
+        expect(r.source, ReflectionSource.gemini);
         _expectValidResult(r);
       },
     );
@@ -386,6 +387,7 @@ void main() {
 
       final r = await _reflect(service, _entry());
 
+      expect(r.source, ReflectionSource.localFallback);
       _expectValidResult(r);
     });
 

@@ -149,6 +149,7 @@ static const contextTags = <String>[
 - `reflectionText: String` — ข้อความสะท้อนความคิด (จำเป็น)
 - `suggestedAction: String?` — ข้อเสนอแนะเล็ก ๆ (ไม่บังคับ)
 - `disclaimer: String?` — ข้อความกำกับ (ไม่บังคับ)
+- `source: ReflectionSource` — แหล่งที่มาของผลลัพธ์ (`gemini` หรือ `localFallback`); ค่าเริ่มต้นเป็น `localFallback`
 
 UI ต้องได้รับ `ReflectionResult` ไม่ใช่แกะ JSON ของ Gemini เอง
 

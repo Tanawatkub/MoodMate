@@ -165,6 +165,7 @@ Positive Regard), เข้าใจจากมุมมองของผู�
         suggestedAction:
             parsed.suggestedAction ?? MockReflectionService.actionFor(safeMood),
         disclaimer: disclaimerText, // แนบเสมอ
+        source: ReflectionSource.gemini,
       );
     } on TimeoutException {
       _logFailure('timeout');

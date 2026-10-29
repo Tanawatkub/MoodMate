@@ -97,6 +97,18 @@ class _AiReflectionScreenState extends State<AiReflectionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text(
+                        result.source == ReflectionSource.gemini
+                            ? 'สร้างโดย Gemini AI'
+                            : 'ข้อความสำรองจาก MoodMate • ไม่ได้มาจาก Gemini',
+                        style: TextStyle(
+                          color: result.source == ReflectionSource.gemini
+                              ? const Color(0xFF558B63)
+                              : const Color(0xFF9A5E25),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       const Text(
                         'บันทึกสะท้อนใจ',
                         style: TextStyle(fontWeight: FontWeight.bold),

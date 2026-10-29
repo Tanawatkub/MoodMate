@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moodmate/app_dependencies.dart';
+import 'package:moodmate/core/constants/moodmate_mood_style.dart';
 import 'package:moodmate/features/auth/auth_service.dart';
 import 'package:moodmate/features/weekly_insight/insights_screen.dart';
 import 'package:moodmate/models/mood_entry.dart';
@@ -10,14 +11,17 @@ import 'package:moodmate/repositories/diary_repository.dart';
 import 'package:moodmate/services/reflection_service.dart';
 
 class _FakeAuthService implements AuthService {
+  _FakeAuthService({DateTime? createdAt})
+    : currentUserCreatedAt = createdAt ?? DateTime.now();
+
+  @override
+  final DateTime? currentUserCreatedAt;
+
   @override
   String? get currentUserId => 'test-user';
 
   @override
   String? get currentDisplayName => 'Test User';
-
-  @override
-  DateTime? get currentUserCreatedAt => DateTime.now();
 
   @override
   Stream<String?> get userIdChanges => Stream.value(currentUserId);
@@ -49,6 +53,8 @@ class _FakeDiaryRepository implements DiaryRepository {
 
   final List<MoodEntry> entries;
   int loadCount = 0;
+  DateTime? lastFrom;
+  DateTime? lastTo;
 
   @override
   Future<List<MoodEntry>> getEntries({
@@ -57,6 +63,8 @@ class _FakeDiaryRepository implements DiaryRepository {
     DateTime? to,
   }) async {
     loadCount++;
+    lastFrom = from;
+    lastTo = to;
     return entries
         .where(
           (entry) =>
@@ -79,10 +87,12 @@ class _FakeDiaryRepository implements DiaryRepository {
 
 class _FakeReflectionService implements ReflectionService {
   int summaryCount = 0;
+  final List<WeeklyInsight> insights = [];
 
   @override
   Future<String> summarizeInsight({required WeeklyInsight insight}) async {
     summaryCount++;
+    insights.add(insight);
     return 'อารมณ์ยิ้มเป็นอารมณ์ที่พบมากที่สุด';
   }
 
@@ -116,9 +126,10 @@ void main() {
           updatedAt: now.subtract(Duration(days: day)),
         ),
     ]);
+    final signupDate = DateTime(now.year, now.month, now.day - 20, 12);
     final reflection = _FakeReflectionService();
     final dependencies = AppDependencies(
-      auth: _FakeAuthService(),
+      auth: _FakeAuthService(createdAt: signupDate),
       diary: diary,
       reflection: reflection,
     );
@@ -128,10 +139,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final sevenDayStart = DateTime(now.year, now.month, now.day - 6);
+    expect(diary.lastFrom, sevenDayStart);
+    expect(diary.lastTo, DateTime(now.year, now.month, now.day + 1));
+    expect(reflection.insights.single.weekStart, sevenDayStart);
     expect(reflection.summaryCount, 1);
     expect(find.text('บทสรุปจาก AI'), findsOneWidget);
     expect(find.text('อารมณ์ยิ้มเป็นอารมณ์ที่พบมากที่สุด'), findsOneWidget);
     expect(find.text('ปัจจัยหลัก'), findsOneWidget);
+    expect(find.textContaining('ช่วงวันที่ '), findsOneWidget);
 
     await tester.tap(find.byTooltip('เลือกช่วงเวลา'));
     await tester.pumpAndSettle();
@@ -139,6 +155,100 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(diary.loadCount, 2);
+    final expectedStart = DateTime(
+      signupDate.year,
+      signupDate.month,
+      signupDate.day,
+    );
+    expect(diary.lastFrom, expectedStart);
+    expect(reflection.insights.last.weekStart, expectedStart);
     expect(reflection.summaryCount, 2);
+  });
+
+  testWidgets('new account insight starts on signup day in AI summary range', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final diary = _FakeDiaryRepository([
+      MoodEntry(
+        id: 'today',
+        userId: 'test-user',
+        mood: 'happy',
+        contextTags: const ['Project'],
+        diaryText: 'ข้อความส่วนตัวที่ไม่ควรส่งไปสร้างสรุป',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ]);
+    final reflection = _FakeReflectionService();
+    final dependencies = AppDependencies(
+      auth: _FakeAuthService(createdAt: now),
+      diary: diary,
+      reflection: reflection,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: InsightsScreen(dependencies: dependencies)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(diary.lastFrom, today);
+    expect(diary.lastTo, DateTime(now.year, now.month, now.day + 1));
+    expect(reflection.insights.single.weekStart, today);
+    expect(
+      find.text(
+        'ช่วงวันที่ ${today.day}/${today.month}/${today.year} - '
+        '${today.day}/${today.month}/${today.year}',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('overview mood face uses the selected mood background color', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final now = DateTime.now();
+    final diary = _FakeDiaryRepository([
+      MoodEntry(
+        id: 'angry-entry',
+        userId: 'test-user',
+        mood: 'angry',
+        contextTags: const [],
+        diaryText: '',
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ]);
+    final dependencies = AppDependencies(
+      auth: _FakeAuthService(createdAt: now),
+      diary: diary,
+      reflection: _FakeReflectionService(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: InsightsScreen(dependencies: dependencies)),
+    );
+    await tester.pumpAndSettle();
+
+    final moodIcon = find.byIcon(Icons.sentiment_very_dissatisfied);
+    expect(moodIcon, findsOneWidget);
+    final avatar = tester.widget<CircleAvatar>(
+      find.ancestor(of: moodIcon, matching: find.byType(CircleAvatar)).first,
+    );
+    expect(
+      avatar.backgroundColor,
+      MoodMateMoodStyle.backgroundColorFor('angry'),
+    );
   });
 }

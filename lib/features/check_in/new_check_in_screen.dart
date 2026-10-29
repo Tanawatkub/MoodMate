@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
 import '../../models/mood_entry.dart';
 import '../../core/constants/moodmate_constants.dart';
+import '../../core/constants/moodmate_mood_style.dart';
 
 class NewCheckInScreen extends StatefulWidget {
   final AppDependencies dependencies;
@@ -47,19 +48,46 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
     setState(() => _isSaving = true);
     final now = DateTime.now();
     try {
-      await widget.dependencies.diary.createEntry(
-        MoodEntry(
-          id: '',
-          userId: userId,
-          mood: _selectedMood,
-          contextTags: _selectedTags.toList(growable: false),
-          diaryText: _diaryController.text,
-          createdAt: now,
-          updatedAt: now,
-        ),
+      final today = DateTime(now.year, now.month, now.day);
+      final tomorrow = DateTime(now.year, now.month, now.day + 1);
+      final todaysEntries = await widget.dependencies.diary.getEntries(
+        userId: userId,
+        from: today,
+        to: tomorrow,
       );
+      final tags = _selectedTags.toList(growable: false);
+
+      late final MoodEntry saved;
+      if (todaysEntries.isEmpty) {
+        saved = await widget.dependencies.diary.createEntry(
+          MoodEntry(
+            id: '',
+            userId: userId,
+            mood: _selectedMood,
+            contextTags: tags,
+            diaryText: _diaryController.text,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+      } else {
+        final latest = todaysEntries.first;
+        saved = await widget.dependencies.diary.updateEntry(
+          latest.copyWith(
+            mood: _selectedMood,
+            contextTags: tags,
+            diaryText: _diaryController.text,
+          ),
+        );
+        for (final duplicate in todaysEntries.skip(1)) {
+          await widget.dependencies.diary.deleteEntry(
+            userId: userId,
+            entryId: duplicate.id,
+          );
+        }
+      }
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(context, saved);
     } on Exception {
       _showMessage('บันทึกไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตและลองใหม่');
     } finally {
@@ -190,27 +218,15 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
                 _buildMoodOption(
                   'มีความสุข',
                   Icons.sentiment_satisfied_alt,
-                  const Color(0xFFFDEADB),
                   'happy',
                 ),
                 _buildMoodOption(
                   'โกรธ',
                   Icons.sentiment_very_dissatisfied,
-                  const Color(0xFFF4C8C8),
                   'angry',
                 ),
-                _buildMoodOption(
-                  'เศร้า',
-                  Icons.sentiment_dissatisfied,
-                  const Color(0xFFE2ECF5),
-                  'sad',
-                ),
-                _buildMoodOption(
-                  'เฉยๆ',
-                  Icons.sentiment_neutral,
-                  const Color(0xFFEFECE2),
-                  'neutral',
-                ),
+                _buildMoodOption('เศร้า', Icons.sentiment_dissatisfied, 'sad'),
+                _buildMoodOption('เฉยๆ', Icons.sentiment_neutral, 'neutral'),
               ],
             ),
             const SizedBox(height: 32),
@@ -416,12 +432,7 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
     );
   }
 
-  Widget _buildMoodOption(
-    String label,
-    IconData icon,
-    Color color,
-    String moodKey,
-  ) {
+  Widget _buildMoodOption(String label, IconData icon, String moodKey) {
     bool isSelected = _selectedMood == moodKey;
     return GestureDetector(
       onTap: () => setState(() => _selectedMood = moodKey),
@@ -431,13 +442,17 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: color,
+              color: MoodMateMoodStyle.backgroundColorFor(moodKey),
               shape: BoxShape.circle,
               border: isSelected
                   ? Border.all(color: const Color(0xFF333333), width: 2)
                   : null,
             ),
-            child: Icon(icon, size: 36, color: const Color(0xFF333333)),
+            child: Icon(
+              icon,
+              size: 36,
+              color: MoodMateMoodStyle.foregroundColor,
+            ),
           ),
           const SizedBox(height: 8),
           Text(

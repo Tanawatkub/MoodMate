@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/constants/moodmate_constants.dart';
+import '../../core/constants/moodmate_mood_style.dart';
 import '../../models/mood_entry.dart';
 import 'ai_reflection_screen.dart';
 
@@ -99,8 +100,10 @@ class _DiaryDetailScreenState extends State<DiaryDetailScreen> {
       builder: (context) => AlertDialog(
         title: const Text('ส่งบันทึกไปให้ AI สะท้อนความรู้สึก?'),
         content: const Text(
-          'หากเปิดใช้ Gemini API เนื้อหาบันทึกนี้และข้อมูลอารมณ์/แท็กจะถูกส่งไปยัง '
-          'ผู้ให้บริการ AI เพื่อสร้างข้อความสะท้อนใจ โปรดหลีกเลี่ยงข้อมูลที่ระบุตัวตนได้',
+          'หากตั้งค่า Gemini API key และเรียกใช้งานสำเร็จ เนื้อหาบันทึกนี้และข้อมูล'
+          'อารมณ์/แท็กจะถูกส่งไปยังผู้ให้บริการ AI หากไม่มี key หรือเรียก Gemini '
+          'ไม่สำเร็จ แอปจะแสดงข้อความสำรองจาก MoodMate ซึ่งไม่ได้มาจาก Gemini '
+          'โปรดหลีกเลี่ยงข้อมูลที่ระบุตัวตนได้',
         ),
         actions: [
           TextButton(
@@ -148,11 +151,13 @@ class _DiaryDetailScreenState extends State<DiaryDetailScreen> {
         children: [
           CircleAvatar(
             radius: 44,
-            backgroundColor: const Color(0xFFFDEADB),
+            backgroundColor: MoodMateMoodStyle.backgroundColorFor(
+              widget.entry.mood,
+            ),
             child: Icon(
               _moodIcon(widget.entry.mood),
               size: 48,
-              color: const Color(0xFF333333),
+              color: MoodMateMoodStyle.foregroundColor,
             ),
           ),
           const SizedBox(height: 16),
