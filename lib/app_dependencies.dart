@@ -4,6 +4,8 @@ import 'repositories/diary_repository.dart';
 import 'repositories/firestore_diary_repository.dart';
 import 'services/gemini_reflection_service.dart';
 import 'services/reflection_service.dart';
+import 'repositories/hive_diary_store.dart';
+import 'repositories/synced_diary_repository.dart';
 
 /// จุดประกอบระบบจุดเดียว: ที่นี่ที่เดียวที่รู้ว่าใช้ implementation ตัวไหน
 /// หน้าจอรับ AppDependencies แล้วเรียกผ่าน interface เท่านั้น
@@ -22,7 +24,10 @@ class AppDependencies {
   /// ตัวจริง (Firebase) ต้องเรียก Firebase.initializeApp ใน main() ก่อน
   factory AppDependencies.firebase() => AppDependencies(
     auth: FirebaseAuthService(),
-    diary: FirestoreDiaryRepository(),
+        diary: SyncedDiaryRepository(
+      local: HiveDiaryStore(),
+      remote: FirestoreDiaryRepository(),
+    ),
     reflection: GeminiReflectionService(
       apiKey: const String.fromEnvironment('GEMINI_API_KEY'),
     ),
