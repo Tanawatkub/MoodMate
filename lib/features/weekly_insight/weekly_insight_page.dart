@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/moodmate_mood_style.dart';
 import '../../models/weekly_insight.dart';
 import 'weekly_insight_config.dart';
 
@@ -65,7 +66,7 @@ class WeeklyInsightPage extends StatelessWidget {
                         Text('บันทึกทั้งหมด ${insight.totalEntries} ครั้ง'),
                         const SizedBox(height: 4),
                         Text('อารมณ์ที่บันทึกบ่อยที่สุด: ${_topMoodText()}'),
-                                                if (insight.totalEntries < weeklyInsightMinEntries) ...[
+                        if (insight.totalEntries < weeklyInsightMinEntries) ...[
                           const SizedBox(height: 8),
                           Text(
                             'ข้อมูลยังไม่เพียงพอ (มี ${insight.totalEntries} '
@@ -84,12 +85,13 @@ class WeeklyInsightPage extends StatelessWidget {
                   keys: weeklyInsightMoods,
                   labels: weeklyInsightMoodLabels,
                   counts: insight.moodCounts,
+                  colorByKey: MoodMateMoodStyle.backgroundColors,
                 ),
                 const SizedBox(height: 16),
                 _CountSection(
                   title: 'บริบทที่พบบ่อย (เรียงจากบ่อยที่สุด)',
                   keys: _sortedTags(),
-                  labels: {for (final t in weeklyInsightContextTags) t: t},
+                  labels: weeklyInsightContextTagLabels,
                   counts: insight.contextCounts,
                 ),
                 const SizedBox(height: 16),
@@ -127,12 +129,14 @@ class _CountSection extends StatelessWidget {
     required this.keys,
     required this.labels,
     required this.counts,
+    this.colorByKey,
   });
 
   final String title;
   final List<String> keys;
   final Map<String, String> labels;
   final Map<String, int> counts;
+  final Map<String, Color>? colorByKey;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +158,7 @@ class _CountSection extends StatelessWidget {
                 label: labels[key] ?? key,
                 count: counts[key] ?? 0,
                 maxCount: maxCount,
+                color: colorByKey?[key],
               ),
               const SizedBox(height: 8),
             ],
@@ -169,11 +174,13 @@ class _BarRow extends StatelessWidget {
     required this.label,
     required this.count,
     required this.maxCount,
+    required this.color,
   });
 
   final String label;
   final int count;
   final int maxCount;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -184,14 +191,15 @@ class _BarRow extends StatelessWidget {
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(value: value, minHeight: 10),
+            child: LinearProgressIndicator(
+              value: value,
+              minHeight: 10,
+              color: color,
+            ),
           ),
         ),
         const SizedBox(width: 8),
-        SizedBox(
-          width: 24,
-          child: Text('$count', textAlign: TextAlign.end),
-        ),
+        SizedBox(width: 24, child: Text('$count', textAlign: TextAlign.end)),
       ],
     );
   }

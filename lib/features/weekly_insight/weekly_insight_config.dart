@@ -8,6 +8,9 @@ const Map<String, String> weeklyInsightMoodLabels =
 
 const List<String> weeklyInsightContextTags = MoodMateConstants.contextTags;
 
+const Map<String, String> weeklyInsightContextTagLabels =
+    MoodMateConstants.contextTagLabels;
+
 /// จำนวนรายการขั้นต่ำที่ถือว่าข้อมูลเพียงพอ
 /// (ข้อเสนอของคนที่ 4 รอทีมยืนยัน เอกสารกลางยังไม่กำหนดเกณฑ์ แก้ที่นี่ที่เดียว)
 const int weeklyInsightMinEntries = 3;

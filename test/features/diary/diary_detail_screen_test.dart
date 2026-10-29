@@ -122,8 +122,8 @@ void main() {
     expect(find.text('25 ต.ค. 2026'), findsOneWidget);
     expect(find.text('09:05 น.'), findsOneWidget);
     expect(find.text('เศร้า'), findsOneWidget);
-    expect(find.text('Lab'), findsOneWidget);
-    expect(find.text('Deadline'), findsOneWidget);
+    expect(find.text('แล็บ'), findsOneWidget);
+    expect(find.text('เดดไลน์'), findsOneWidget);
     expect(find.text('งานเยอะมาก'), findsOneWidget);
   });
 

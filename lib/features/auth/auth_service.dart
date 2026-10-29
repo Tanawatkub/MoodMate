@@ -2,6 +2,50 @@
 /// UI เรียกผ่าน interface นี้เท่านั้น ห้าม import Firebase ใน Widget
 /// ห้ามเปลี่ยน signature โดยไม่คุยทีม
 abstract class AuthService {
+  static const int minPasswordLength = 8;
+
+  /// Returns a localized validation error, or null when the password is valid.
+  static String? validatePassword(String password) {
+    if (password.runes.length < minPasswordLength) {
+      return 'รหัสผ่านต้องมีอย่างน้อย $minPasswordLength ตัวอักษร';
+    }
+    if (!RegExp(r'[A-Z]').hasMatch(password)) {
+      return 'รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษพิมพ์ใหญ่อย่างน้อย 1 ตัว';
+    }
+    if (!RegExp(r'[a-z]').hasMatch(password)) {
+      return 'รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษพิมพ์เล็กอย่างน้อย 1 ตัว';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(password)) {
+      return 'รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว';
+    }
+    if (!RegExp(r'[^A-Za-z0-9\s]').hasMatch(password)) {
+      return 'รหัสผ่านต้องมีอักขระพิเศษอย่างน้อย 1 ตัว';
+    }
+
+    final normalized = password
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    const commonPasswords = {
+      'iloveyou',
+      'letmein',
+      'welcome',
+    };
+    const predictablePatterns = [
+      'password',
+      'qwerty',
+      '123456',
+      '654321',
+      'abcdef',
+      'fedcba',
+    ];
+    if (commonPasswords.contains(normalized) ||
+        predictablePatterns.any((pattern) => normalized.contains(pattern)) ||
+        RegExp(r'(.)\1{5,}').hasMatch(normalized)) {
+      return 'รหัสผ่านนี้คาดเดาง่ายเกินไป กรุณาใช้รหัสผ่านอื่น';
+    }
+    return null;
+  }
+
   /// UID ของผู้ใช้ที่ login อยู่ หรือ null ถ้ายังไม่ได้ login
   /// userId ของ MoodEntry ต้องมาจากค่านี้เท่านั้น
   String? get currentUserId;

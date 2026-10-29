@@ -182,7 +182,13 @@ class _DiaryDetailScreenState extends State<DiaryDetailScreen> {
               spacing: 8,
               runSpacing: 8,
               children: widget.entry.contextTags
-                  .map((tag) => Chip(label: Text(tag)))
+                  .map(
+                    (tag) => Chip(
+                      label: Text(
+                        MoodMateConstants.contextTagLabels[tag] ?? tag,
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           const SizedBox(height: 24),

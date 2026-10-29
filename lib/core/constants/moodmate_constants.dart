@@ -15,6 +15,17 @@ class MoodMateConstants {
     'neutral': 'เฉย ๆ',
   };
 
+  /// Context tag labels shown in the UI; persisted values stay in English.
+  static const contextTagLabels = <String, String>{
+    'Coding': 'โค้ดดิ้ง',
+    'Lab': 'แล็บ',
+    'Project': 'โปรเจกต์',
+    'Group Work': 'งานกลุ่ม',
+    'Presentation': 'พรีเซนต์',
+    'Deadline': 'เดดไลน์',
+    'Personal': 'เรื่องส่วนตัว',
+  };
+
   /// Context tags ที่เก็บใน Model/Database
   static const contextTags = <String>[
     'Coding',

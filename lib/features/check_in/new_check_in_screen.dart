@@ -18,16 +18,6 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
   final Set<String> _selectedTags = {};
   bool _isSaving = false;
 
-  static const _tagLabels = <String, String>{
-    'Coding': 'โค้ดดิ้ง',
-    'Lab': 'แล็บ',
-    'Project': 'โปรเจกต์',
-    'Group Work': 'งานกลุ่ม',
-    'Presentation': 'พรีเซนต์',
-    'Deadline': 'เดดไลน์',
-    'Personal': 'เรื่องส่วนตัว',
-  };
-
   @override
   void dispose() {
     _diaryController.dispose();
@@ -245,7 +235,10 @@ class _NewCheckInScreenState extends State<NewCheckInScreen> {
               runSpacing: 12,
               children: [
                 for (final tag in MoodMateConstants.contextTags)
-                  _buildTagChip(tag, _tagLabels[tag]!),
+                  _buildTagChip(
+                    tag,
+                    MoodMateConstants.contextTagLabels[tag] ?? tag,
+                  ),
               ],
             ),
             const SizedBox(height: 32),
