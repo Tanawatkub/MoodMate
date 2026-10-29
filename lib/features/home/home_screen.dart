@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
 import '../../core/constants/moodmate_constants.dart';
+import '../../core/constants/moodmate_mood_style.dart';
 import '../../models/mood_entry.dart';
+import '../../repositories/synced_diary_repository.dart';
 import '../check_in/new_check_in_screen.dart';
 import '../diary/diary_detail_screen.dart';
 import '../profile/profile_screen.dart';
@@ -20,11 +24,24 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late Future<List<MoodEntry>> _entriesFuture;
+  StreamSubscription<void>? _diaryChangesSubscription;
 
   @override
   void initState() {
     super.initState();
     _entriesFuture = _loadEntries();
+    final diary = widget.dependencies.diary;
+    if (diary is SyncedDiaryRepository) {
+      _diaryChangesSubscription = diary.changes.listen((_) {
+        if (mounted) _reload();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _diaryChangesSubscription?.cancel();
+    super.dispose();
   }
 
   Future<List<MoodEntry>> _loadEntries() async {
@@ -57,7 +74,10 @@ class _HomeScreenState extends State<HomeScreen> {
     await future;
   }
 
-  String _dateKey(DateTime date) => '${date.year}-${date.month}-${date.day}';
+  String _dateKey(DateTime date) {
+    final local = date.toLocal();
+    return '${local.year}-${local.month}-${local.day}';
+  }
 
   String _formatDate(DateTime date) {
     const months = [
@@ -98,24 +118,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openNewCheckIn() async {
-    final saved = await Navigator.push<bool>(
+    final saved = await Navigator.push<MoodEntry>(
       context,
       MaterialPageRoute(
         builder: (_) => NewCheckInScreen(dependencies: widget.dependencies),
       ),
     );
-    if (saved == true && mounted) _reload();
+    if (saved == null || !mounted) return;
+    setState(() {
+      _entriesFuture = _entriesFuture.then((entries) {
+        final savedDateKey = _dateKey(saved.createdAt);
+        final updated =
+            entries
+                .where((entry) => _dateKey(entry.createdAt) != savedDateKey)
+                .toList()
+              ..add(saved)
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return updated;
+      });
+    });
   }
 
   Future<void> _openEntry(MoodEntry entry) async {
-    await Navigator.push<bool>(
+    final deleted = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) =>
             DiaryDetailScreen(dependencies: widget.dependencies, entry: entry),
       ),
     );
-    if (mounted) _reload();
+    if (deleted != true || !mounted) return;
+    setState(() {
+      _entriesFuture = _entriesFuture.then(
+        (entries) =>
+            entries.where((candidate) => candidate.id != entry.id).toList(),
+      );
+    });
   }
 
   @override
@@ -263,7 +301,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         else
                           Row(
                             children: [
-                              Icon(_moodIcon(topMood ?? 'neutral'), size: 40),
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundColor:
+                                    MoodMateMoodStyle.backgroundColorFor(
+                                      topMood ?? 'neutral',
+                                    ),
+                                child: Icon(
+                                  _moodIcon(topMood ?? 'neutral'),
+                                  color: MoodMateMoodStyle.foregroundColor,
+                                  size: 28,
+                                ),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
@@ -349,12 +398,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: CircleAvatar(
                               backgroundColor: entry == null
                                   ? const Color(0xFFEFECE2)
-                                  : const Color(0xFFFDEADB),
+                                  : MoodMateMoodStyle.backgroundColorFor(
+                                      entry.mood,
+                                    ),
                               child: Icon(
                                 entry == null
                                     ? Icons.remove
                                     : _moodIcon(entry.mood),
-                                color: const Color(0xFF333333),
+                                color: MoodMateMoodStyle.foregroundColor,
                               ),
                             ),
                           ),

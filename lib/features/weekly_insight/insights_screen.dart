@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app_dependencies.dart';
+import '../../core/constants/moodmate_mood_style.dart';
 import '../../models/weekly_insight.dart';
 import '../../services/reflection_service.dart';
 import 'weekly_insight_calculator.dart';
@@ -53,7 +54,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
     }
     final now = DateTime.now();
     final end = DateTime(now.year, now.month, now.day + 1);
-    final start = DateTime(now.year, now.month, now.day - range.days + 1);
+    final rangeStart = DateTime(now.year, now.month, now.day - range.days + 1);
+    final createdAt = widget.dependencies.auth.currentUserCreatedAt?.toLocal();
+    final accountStart = createdAt == null
+        ? rangeStart
+        : DateTime(createdAt.year, createdAt.month, createdAt.day);
+    final start = accountStart.isAfter(rangeStart) ? accountStart : rangeStart;
     final entries = await widget.dependencies.diary.getEntries(
       userId: userId,
       from: start,
@@ -151,7 +157,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
       insight.weekEnd.month,
       insight.weekEnd.day - 1,
     );
-    return '${_formatDate(insight.weekStart)} - ${_formatDate(lastDay)}';
+    return 'ช่วงวันที่ ${_formatDate(insight.weekStart)} - ${_formatDate(lastDay)}';
   }
 
   @override
@@ -394,10 +400,12 @@ class _OverviewCard extends StatelessWidget {
             const SizedBox(height: 14),
             CircleAvatar(
               radius: 38,
-              backgroundColor: const Color(0xFFF7ECCD),
+              backgroundColor: topMood == null
+                  ? const Color(0xFFF7ECCD)
+                  : MoodMateMoodStyle.backgroundColorFor(topMood!),
               child: Icon(
                 _moodIcons[topMood] ?? Icons.spa_outlined,
-                color: const Color(0xFF4A443E),
+                color: MoodMateMoodStyle.foregroundColor,
                 size: 34,
               ),
             ),
