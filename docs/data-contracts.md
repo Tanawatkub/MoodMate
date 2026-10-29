@@ -4,7 +4,7 @@
 > ใช้ร่วมกับ `MOODMATE_PROJECT_CONTEXT.md` และ `MOODMATE_PROJECT_GIT.md` (สัญญากลางของ `ReflectionService`, `ReflectionResult`, `WeeklyInsight` อยู่ใน `MOODMATE_PROJECT_GIT.md` หัวข้อ 4-5)
 > **กติกา:** ห้ามเปลี่ยนชื่อไฟล์ class method field หรือค่าที่เก็บในเอกสารนี้โดยไม่คุยทีม หากเปลี่ยน ต้องแก้เอกสารนี้ `firestore.rules` และทุกส่วนที่เชื่อมต่อในงานเดียวกัน
 
-อัปเดตล่าสุด: 24 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
+อัปเดตล่าสุด: 26 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
 
 ---
 
@@ -89,6 +89,8 @@ abstract class AuthService {
   Future<void> signIn({required String email, required String password});
   Future<void> signOut();
   Future<void> updateDisplayName(String name);   // ตัดช่องว่างหัวท้าย ไม่ว่าง ไม่เกิน 50 ตัวอักษร
+  DateTime? get currentUserCreatedAt;                       // วันสร้างบัญชี null = ไม่มี metadata
+  Future<void> sendPasswordResetEmail({required String email}); // ส่งลิงก์ตั้งรหัสผ่านใหม่
 }
 ```
 
@@ -123,7 +125,8 @@ Future<void> main() async {
 }
 ```
 
-หน้าจอรับ `AppDependencies` (`auth`, `diary`) แล้วเรียกผ่าน interface ระหว่างพัฒนา UI ใช้ `MockDiaryRepository(sampleUserId: 'mock-user')` แทนได้ที่จุดนี้จุดเดียว
+หน้าจอรับ AppDependencies (auth, diary, reflection) แล้วเรียกผ่าน interface ระหว่างพัฒนา UI ใช้ `MockDiaryRepository(sampleUserId: 'mock-user')` แทนได้ที่จุดนี้จุดเดียว 
+diary คือ SyncedDiaryRepository และ reflection คือ GeminiReflectionService (key ผ่าน --dart-define=GEMINI_API_KEY)
 
 ## 7. โครงสร้างบน Cloud Firestore
 
@@ -157,16 +160,17 @@ Future<void> main() async {
 
 ## 8. สถานะการทดสอบ
 
-ทดสอบบน Android emulator (API 34) กับ Firebase จริง เมื่อ 24 ต.ค. 2026 ด้วยสคริปต์ชั่วคราว ผ่าน 25 จาก 25 เคส:
+ทดสอบบน Android emulator (API 34) กับ Firebase จริง เมื่อ 24 ต.ค. 2026 ด้วยสคริปต์ชั่วคราว ผ่าน 32 จาก 32 เคส:
 
 - **AuthService:** สมัคร, อีเมลซ้ำ, รหัสผิด, รหัสสั้น, login
 - **FirestoreDiaryRepository:** สร้าง/อ่าน/แก้/ลบ, ช่วงเวลา `[from, to)`, diary ว่าง, เรียงใหม่สุดก่อน, แก้รายการที่ไม่มี → `StateError`
 - **Rules ปฏิเสธข้อมูลผิดรูปแบบ:** mood/tag นอกรายการ, field เกิน, `userId` ไม่ตรง, diary เกินเพดาน (ทดสอบด้วยอักษรอังกฤษ), แก้ `createdAt`
 - **Rules ข้ามบัญชี:** ผู้ใช้ B อ่าน/เขียน/แก้/ลบของ A ไม่ได้ แต่ใช้ของตัวเองได้
+- **Display name** (ยังไม่ตั้ง→null, ตัดช่องว่าง, ว่าง/เกิน 50→invalid-display-name, ยังไม่ login→not-signed-in, คงอยู่หลัง logout/login)
 
 `MockDiaryRepository` มี unit test ใน `test/repositories/`
 
-**ยังไม่ได้ทดสอบ:** พฤติกรรมตอนออฟไลน์, ข้อความภาษาไทยยาวใกล้เพดาน, iOS, การทดสอบ Rules แบบอัตโนมัติด้วย Firebase Emulator, ผลกับอุปกรณ์จริง
+**ยังไม่ได้ทดสอบ:** ยังไม่ได้ทดสอบบนเครื่องจริง" จนกว่าจะทดสอบ emulator, ข้อความภาษาไทยยาวใกล้เพดาน, iOS, การทดสอบ Rules แบบอัตโนมัติด้วย Firebase Emulator, ผลกับอุปกรณ์จริง
 
 ## 9. การปฏิบัติงานและความปลอดภัย
 
