@@ -30,12 +30,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
   static const _ink = Color(0xFF33302D);
   static const _muted = Color(0xFF817B75);
   static const _accent = Color(0xFFC48E66);
-  static const _moodColors = <String, Color>{
-    'happy': Color(0xFF5B9B70),
-    'angry': Color(0xFFC77C62),
-    'sad': Color(0xFF8B78B4),
-    'neutral': Color(0xFFD1A94A),
-  };
+  static const _moodColors = MoodMateMoodStyle.backgroundColors;
 
   _InsightRange _selectedRange = _InsightRange.sevenDays;
   late Future<WeeklyInsight> _insightFuture;
@@ -558,7 +553,8 @@ class _ContextTags extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
               child: Text(
-                '${activeTags[i]}  ${counts[activeTags[i]]} ครั้ง',
+                '${weeklyInsightContextTagLabels[activeTags[i]] ?? activeTags[i]}'
+                '  ${counts[activeTags[i]]} ครั้ง',
                 style: const TextStyle(
                   color: Color(0xFF4F4A44),
                   fontSize: 11,

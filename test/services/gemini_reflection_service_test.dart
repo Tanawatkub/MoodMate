@@ -156,11 +156,11 @@ void main() {
 
     group('dashboard summary', () {
       test(
-        'summarizes aggregate stats using the same Gemini service',
+        'summarizes aggregate stats with localized context labels',
         () async {
           final model = _FakeModel(
             (_) async => _textResponse(
-              'อารมณ์ยิ้มพบมากที่สุด ลองสังเกตสิ่งที่ช่วยให้รู้สึกดี',
+              'ใน period นี้ บริบท Group Work พบมาก ลองสังเกตแนวโน้มดู',
             ),
           );
           final service = _service(model);
@@ -169,15 +169,18 @@ void main() {
             weekEnd: DateTime(2026, 10, 26),
             totalEntries: 3,
             moodCounts: {'happy': 2, 'sad': 1},
-            contextCounts: {'Project': 2},
+            contextCounts: {'Group Work': 2},
           );
 
           final summary = await service.summarizeInsight(insight: insight);
 
-          expect(summary, contains('อารมณ์ยิ้ม'));
+          expect(summary, contains('ในช่วงเวลานี้ บริบท งานกลุ่ม พบมาก'));
+          expect(summary, isNot(contains('Group Work')));
+          expect(summary, isNot(contains('period')));
           expect(model.callCount, 1);
           expect(model.lastPrompt, contains('จำนวนบันทึกทั้งหมด: 3'));
-          expect(model.lastPrompt, contains('Project'));
+          expect(model.lastPrompt, contains('งานกลุ่ม'));
+          expect(model.lastPrompt, isNot(contains('Group Work')));
           expect(
             model.lastPrompt,
             isNot(contains('รู้สึกกดดันกับงานที่ต้องส่ง')),

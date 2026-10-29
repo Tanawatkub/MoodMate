@@ -29,6 +29,11 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> signUp({required String email, required String password}) async {
+    final passwordError = AuthService.validatePassword(password);
+    if (passwordError != null) {
+      throw AuthException('weak-password', passwordError);
+    }
+
     try {
       await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
@@ -113,7 +118,7 @@ class FirebaseAuthService implements AuthService {
       case 'weak-password':
         return const AuthException(
           'weak-password',
-          'รหัสผ่านสั้นเกินไป (อย่างน้อย 6 ตัวอักษร)',
+          'รหัสผ่านไม่เป็นไปตามข้อกำหนด กรุณาตรวจสอบอีกครั้ง',
         );
       case 'user-disabled':
         return const AuthException(

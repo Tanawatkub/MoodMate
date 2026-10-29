@@ -1,4 +1,3 @@
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,10 +19,7 @@ void main() {
       test('returns the current user UID when signed in', () {
         final auth = MockFirebaseAuth(
           signedIn: true,
-          mockUser: MockUser(
-            uid: 'u1',
-            displayName: 'สมชาย',
-          ),
+          mockUser: MockUser(uid: 'u1', displayName: 'สมชาย'),
         );
         final service = FirebaseAuthService(auth: auth);
 
@@ -42,10 +38,7 @@ void main() {
       test('returns the current display name', () {
         final auth = MockFirebaseAuth(
           signedIn: true,
-          mockUser: MockUser(
-            uid: 'u1',
-            displayName: 'สมชาย',
-          ),
+          mockUser: MockUser(uid: 'u1', displayName: 'สมชาย'),
         );
         final service = FirebaseAuthService(auth: auth);
 
@@ -55,10 +48,7 @@ void main() {
       test('returns null when display name is empty', () {
         final auth = MockFirebaseAuth(
           signedIn: true,
-          mockUser: MockUser(
-            uid: 'u1',
-            displayName: '',
-          ),
+          mockUser: MockUser(uid: 'u1', displayName: ''),
         );
         final service = FirebaseAuthService(auth: auth);
 
@@ -156,10 +146,7 @@ void main() {
       test('trims whitespace around the display name', () async {
         final auth = MockFirebaseAuth(
           signedIn: true,
-          mockUser: MockUser(
-            uid: 'u1',
-            displayName: 'ชื่อเดิม',
-          ),
+          mockUser: MockUser(uid: 'u1', displayName: 'ชื่อเดิม'),
         );
         final service = FirebaseAuthService(auth: auth);
 
@@ -176,13 +163,13 @@ void main() {
 
         await service.signUp(
           email: 'newuser@example.com',
-          password: 'StrongPassword123!',
+          password: 'C0ffee!River2026',
         );
 
         expect(service.currentUserId, isNotNull);
       });
 
-test('maps email-already-in-use to AuthException', () async {
+      test('maps email-already-in-use to AuthException', () async {
         final auth = MockFirebaseAuth();
 
         whenCalling(
@@ -191,7 +178,7 @@ test('maps email-already-in-use to AuthException', () async {
             null,
             {
               #email: 'existing@example.com',
-              #password: 'StrongPassword123!',
+              #password: 'C0ffee!River2026',
             }, // ระบุ named arguments ให้ตรงกับที่ signUp เรียก
           ),
         ).on(auth).thenThrow(FirebaseAuthException(code: 'email-already-in-use'));
@@ -201,7 +188,7 @@ test('maps email-already-in-use to AuthException', () async {
         await expectLater(
           service.signUp(
             email: 'existing@example.com',
-            password: 'StrongPassword123!',
+            password: 'C0ffee!River2026',
           ),
           throwsA(
             isA<AuthException>().having(
@@ -217,20 +204,31 @@ test('maps email-already-in-use to AuthException', () async {
         final auth = MockFirebaseAuth();
 
         whenCalling(
-          Invocation.method(
-            #createUserWithEmailAndPassword,
-            null,
-          ),
-        ).on(auth).thenThrow(
-          FirebaseAuthException(code: 'weak-password'),
-        );
+          Invocation.method(#createUserWithEmailAndPassword, null),
+        ).on(auth).thenThrow(FirebaseAuthException(code: 'weak-password'));
 
+        final service = FirebaseAuthService(auth: auth);
+
+        await expectLater(
+          service.signUp(email: 'newuser@example.com', password: '123'),
+          throwsA(
+            isA<AuthException>().having(
+              (error) => error.code,
+              'code',
+              'weak-password',
+            ),
+          ),
+        );
+      });
+
+      test('rejects a predictable password before calling Firebase', () async {
+        final auth = MockFirebaseAuth();
         final service = FirebaseAuthService(auth: auth);
 
         await expectLater(
           service.signUp(
             email: 'newuser@example.com',
-            password: '123',
+            password: 'Password123!',
           ),
           throwsA(
             isA<AuthException>().having(
@@ -240,6 +238,7 @@ test('maps email-already-in-use to AuthException', () async {
             ),
           ),
         );
+        expect(service.currentUserId, isNull);
       });
     });
 
@@ -266,21 +265,13 @@ test('maps email-already-in-use to AuthException', () async {
         final auth = MockFirebaseAuth();
 
         whenCalling(
-          Invocation.method(
-            #signInWithEmailAndPassword,
-            null,
-          ),
-        ).on(auth).thenThrow(
-          FirebaseAuthException(code: 'wrong-password'),
-        );
+          Invocation.method(#signInWithEmailAndPassword, null),
+        ).on(auth).thenThrow(FirebaseAuthException(code: 'wrong-password'));
 
         final service = FirebaseAuthService(auth: auth);
 
         await expectLater(
-          service.signIn(
-            email: 'user@example.com',
-            password: 'wrong-password',
-          ),
+          service.signIn(email: 'user@example.com', password: 'wrong-password'),
           throwsA(
             isA<AuthException>().having(
               (error) => error.code,
@@ -295,13 +286,8 @@ test('maps email-already-in-use to AuthException', () async {
         final auth = MockFirebaseAuth();
 
         whenCalling(
-          Invocation.method(
-            #signInWithEmailAndPassword,
-            null,
-          ),
-        ).on(auth).thenThrow(
-          FirebaseAuthException(code: 'user-not-found'),
-        );
+          Invocation.method(#signInWithEmailAndPassword, null),
+        ).on(auth).thenThrow(FirebaseAuthException(code: 'user-not-found'));
 
         final service = FirebaseAuthService(auth: auth);
 
@@ -323,22 +309,14 @@ test('maps email-already-in-use to AuthException', () async {
       test('maps network errors to AuthException', () async {
         final auth = MockFirebaseAuth();
 
-        whenCalling(
-          Invocation.method(
-            #signInWithEmailAndPassword,
-            null,
-          ),
-        ).on(auth).thenThrow(
-          FirebaseAuthException(code: 'network-request-failed'),
-        );
+        whenCalling(Invocation.method(#signInWithEmailAndPassword, null))
+            .on(auth)
+            .thenThrow(FirebaseAuthException(code: 'network-request-failed'));
 
         final service = FirebaseAuthService(auth: auth);
 
         await expectLater(
-          service.signIn(
-            email: 'user@example.com',
-            password: 'Password123!',
-          ),
+          service.signIn(email: 'user@example.com', password: 'Password123!'),
           throwsA(
             isA<AuthException>().having(
               (error) => error.code,
@@ -352,22 +330,14 @@ test('maps email-already-in-use to AuthException', () async {
       test('maps unknown Firebase errors to the default error', () async {
         final auth = MockFirebaseAuth();
 
-        whenCalling(
-          Invocation.method(
-            #signInWithEmailAndPassword,
-            null,
-          ),
-        ).on(auth).thenThrow(
-          FirebaseAuthException(code: 'some-unexpected-error'),
-        );
+        whenCalling(Invocation.method(#signInWithEmailAndPassword, null))
+            .on(auth)
+            .thenThrow(FirebaseAuthException(code: 'some-unexpected-error'));
 
         final service = FirebaseAuthService(auth: auth);
 
         await expectLater(
-          service.signIn(
-            email: 'user@example.com',
-            password: 'Password123!',
-          ),
+          service.signIn(email: 'user@example.com', password: 'Password123!'),
           throwsA(isA<AuthException>()),
         );
       });
@@ -377,10 +347,7 @@ test('maps email-already-in-use to AuthException', () async {
       test('clears the current user after signing out', () async {
         final auth = MockFirebaseAuth(
           signedIn: true,
-          mockUser: MockUser(
-            uid: 'u1',
-            displayName: 'สมชาย',
-          ),
+          mockUser: MockUser(uid: 'u1', displayName: 'สมชาย'),
         );
         final service = FirebaseAuthService(auth: auth);
 

@@ -40,9 +40,12 @@ class MockReflectionService implements ReflectionService {
             (a, b) => a.value >= b.value ? a : b,
           );
     final moodLabel = MoodMateConstants.moodLabels[topMood.key] ?? topMood.key;
+    final tagLabel = topTag == null
+        ? null
+        : MoodMateConstants.contextTagLabels[topTag.key] ?? topTag.key;
     final tagText = topTag == null
         ? 'ยังไม่มีบริบทที่บันทึกซ้ำเด่นชัด'
-        : 'บริบทที่พบบ่อยคือ ${topTag.key} (${topTag.value} ครั้ง)';
+        : 'บริบทที่พบบ่อยคือ $tagLabel (${topTag.value} ครั้ง)';
     return 'ช่วงนี้คุณบันทึกความรู้สึก ${insight.totalEntries} ครั้ง '
         'อารมณ์ที่พบมากที่สุดคือ$moodLabel (${topMood.value} ครั้ง) '
         'และ$tagText สถิตินี้บอกเพียงสิ่งที่ถูกบันทึก ไม่ได้ยืนยันสาเหตุ';

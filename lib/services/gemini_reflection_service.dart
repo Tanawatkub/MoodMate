@@ -236,7 +236,7 @@ Positive Regard), เข้าใจจากมุมมองของผู�
       if (_violatesSafetyRules(summary)) {
         throw const FormatException('unsafe_summary');
       }
-      return summary;
+      return _localizeInsightSummary(summary);
     } on TimeoutException {
       _logInsightFailure('timeout');
       throw const InsightSummaryException(
@@ -329,15 +329,39 @@ Positive Regard), เข้าใจจากมุมมองของผู�
       for (final entry in insight.moodCounts.entries)
         MoodMateConstants.moodLabels[entry.key] ?? entry.key: entry.value,
     };
+    final contexts = {
+      for (final entry in insight.contextCounts.entries)
+        MoodMateConstants.contextTagLabels[entry.key] ?? entry.key: entry.value,
+    };
     return '''
 สรุปสถิติการเช็กอินของผู้ใช้ในช่วง ${_formatInsightDate(insight.weekStart)} ถึง ${_formatInsightDate(endDate)}
 จำนวนบันทึกทั้งหมด: ${insight.totalEntries}
 จำนวนอารมณ์: ${jsonEncode(moods)}
-จำนวนบริบท: ${jsonEncode(insight.contextCounts)}
+จำนวนบริบท: ${jsonEncode(contexts)}
 
 เขียนสรุปสั้น ๆ ว่าอารมณ์หรือบริบทใดพบมาก และชวนสังเกตแนวโน้มอย่างไม่ฟันธง
 ข้อมูลนี้เป็นสถิติรวมเท่านั้น ไม่มีข้อความ diary ของผู้ใช้
 ''';
+  }
+
+  String _localizeInsightSummary(String summary) {
+    var localized = summary;
+    for (final entry in MoodMateConstants.contextTagLabels.entries) {
+      localized = localized.replaceAllMapped(
+        RegExp(RegExp.escape(entry.key), caseSensitive: false),
+        (_) => entry.value,
+      );
+    }
+    return localized
+        .replaceAll(
+          RegExp(r'\bperiod\s+นี้', caseSensitive: false),
+          'ช่วงเวลานี้',
+        )
+        .replaceAll(
+          RegExp(r'ใน\s+ช่วงเวลานี้', caseSensitive: false),
+          'ในช่วงเวลานี้',
+        )
+        .replaceAll(RegExp(r'\bperiod\b', caseSensitive: false), 'ช่วงเวลา');
   }
 
   String _formatInsightDate(DateTime date) =>

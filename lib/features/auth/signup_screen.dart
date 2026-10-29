@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../app_dependencies.dart';
 import 'auth_service.dart';
@@ -21,30 +23,57 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  bool _passwordHasBeenEdited = false;
 
-  bool _isPasswordValid(String password) {
-    return password.length >= 6;
-  }
+  static const _passwordRequirementMessage =
+      'กรุณาใช้รหัสผ่านอย่างน้อย 8 ตัวอักษร มีทั้งตัวพิมพ์ใหญ่ พิมพ์เล็ก '
+      'ตัวเลข และอักขระพิเศษ (เช่น ! @ # \$)';
 
   Future<void> _handleSignup() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (AuthService.validatePassword(_passwordController.text) != null) {
+        setState(() => _passwordHasBeenEdited = true);
+      }
+      return;
+    }
+    if (AuthService.validatePassword(_passwordController.text) != null) {
+      setState(() => _passwordHasBeenEdited = true);
+      return;
+    }
 
     setState(() => _isLoading = true);
-    try {
+    var canContinue = true;
+    final signupFlow = () async {
       await widget.dependencies.auth.signUp(
         email: _emailController.text,
         password: _passwordController.text,
       );
+      if (!canContinue || !mounted) return;
       await widget.dependencies.auth.updateDisplayName(_nameController.text);
 
-      if (mounted) {
+      if (canContinue && mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
+    }();
+    try {
+      await signupFlow.timeout(const Duration(seconds: 30));
     } on AuthException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } on TimeoutException {
+      canContinue = false;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'สมัครสมาชิกใช้เวลานานเกินไป กรุณาตรวจสอบอินเทอร์เน็ต '
+              'และลองเข้าสู่ระบบก่อนสมัครซ้ำ',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -123,20 +152,31 @@ class _SignupScreenState extends State<SignupScreen> {
                 // ช่องกรอกรหัสผ่าน
                 _buildTextField(
                   controller: _passwordController,
-                  hintText: 'รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)',
+                  hintText: 'รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)',
                   icon: Icons.lock_outline,
                   obscureText: _obscurePassword,
                   onToggleVisibility: () =>
                       setState(() => _obscurePassword = !_obscurePassword),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'กรุณากรอกรหัสผ่าน';
-                    }
-                    if (!_isPasswordValid(value)) {
-                      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-                    }
-                    return null;
+                  onChanged: (_) {
+                    setState(() => _passwordHasBeenEdited = true);
                   },
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, top: 8),
+                  child: Text(
+                    _passwordRequirementMessage,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color:
+                          _passwordHasBeenEdited &&
+                              AuthService.validatePassword(
+                                    _passwordController.text,
+                                  ) !=
+                                  null
+                          ? Colors.red
+                          : const Color(0xFF888888),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -232,12 +272,14 @@ class _SignupScreenState extends State<SignupScreen> {
     bool obscureText = false,
     TextInputType? keyboardType,
     VoidCallback? onToggleVisibility,
+    ValueChanged<String>? onChanged,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         filled: true,
