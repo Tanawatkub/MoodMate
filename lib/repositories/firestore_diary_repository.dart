@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/mood_entry.dart';
 import 'diary_repository.dart';
+import 'remote_diary_source.dart';
 
 /// ตัวจริงที่เก็บข้อมูลบน Cloud Firestore
 /// โครงสร้าง: users/{userId}/mood_entries/{entryId}
@@ -17,7 +18,7 @@ import 'diary_repository.dart';
 ///
 /// ข้อผิดพลาดจาก Firestore (เช่น permission-denied, unavailable)
 /// จะเป็น FirebaseException ให้ UI จับและแสดงสถานะ error
-class FirestoreDiaryRepository implements DiaryRepository {
+class FirestoreDiaryRepository implements DiaryRepository, RemoteDiarySource {
   FirestoreDiaryRepository({FirebaseFirestore? firestore})
       : _db = firestore ?? FirebaseFirestore.instance;
 
@@ -92,6 +93,41 @@ class FirestoreDiaryRepository implements DiaryRepository {
     required String entryId,
   }) {
     return _collection(userId).doc(entryId).delete();
+  }
+
+  // ---- ส่วนที่ SyncedDiaryRepository ใช้ซิงก์ (RemoteDiarySource) ----
+
+  /// อ่านจากเซิร์ฟเวอร์จริงเท่านั้น (ออฟไลน์จะโยน error)
+  @override
+  Future<List<MoodEntry>> fetchAll(String userId) async {
+    final snapshot = await _collection(userId)
+        .orderBy('createdAt', descending: true)
+        .get(const GetOptions(source: Source.server));
+    return snapshot.docs.map(_fromDoc).toList();
+  }
+
+  /// เขียนรายการทั้งก้อนด้วย id และเวลาตามที่ส่งมา
+  /// ถูก Rules ปฏิเสธ -> RemoteRejectedException (ไม่ใช่ปัญหาเครือข่าย)
+  @override
+  Future<void> upsert(MoodEntry entry) async {
+    try {
+      await _collection(entry.userId).doc(entry.id).set(_toMap(entry));
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied' || e.code == 'invalid-argument') {
+        throw RemoteRejectedException(e.code);
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> delete({required String userId, required String entryId}) async {
+    try {
+      await _collection(userId).doc(entryId).delete();
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') throw RemoteRejectedException(e.code);
+      rethrow;
+    }
   }
 
   // ต้องมี key เท่านี้เท่านั้น (Security Rules ตรวจด้วย hasOnly) ห้ามใส่ id
