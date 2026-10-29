@@ -92,7 +92,6 @@ class FirebaseAuthService implements AuthService {
     }
     try {
       await user.updateDisplayName(trimmed);
-      await user.reload(); // ให้ currentUser สะท้อนชื่อใหม่ทันที
     } on FirebaseAuthException catch (e) {
       throw _toAuthException(e);
     }
