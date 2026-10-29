@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 # รันอัตโนมัติเมื่อ push เข้า main หรือ branch feature/** และเมื่อเปิด PR เข้า main
 # กดรันเองได้จากแท็บ Actions (workflow_dispatch) เหมาะสำหรับสาธิตวันนำเสนอ
@@ -26,7 +26,7 @@ jobs:
   # ---------- Job 1: ตรวจโค้ดและทดสอบ ----------
   test:
     name: Analyze & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       # เกณฑ์ Coverage ขั้นต่ำ (ตามเกณฑ์ประเมินส่วนที่ 5)
@@ -107,14 +107,14 @@ jobs:
   # ---------- Job 2: Build แอป Android ----------
   build:
     name: Build Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
