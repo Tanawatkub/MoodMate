@@ -4,7 +4,7 @@
 > ใช้ร่วมกับ `MOODMATE_PROJECT_CONTEXT.md` และ `MOODMATE_PROJECT_GIT.md` (สัญญากลางของ `ReflectionService`, `ReflectionResult`, `WeeklyInsight` อยู่ใน `MOODMATE_PROJECT_GIT.md` หัวข้อ 4-5)
 > **กติกา:** ห้ามเปลี่ยนชื่อไฟล์ class method field หรือค่าที่เก็บในเอกสารนี้โดยไม่คุยทีม หากเปลี่ยน ต้องแก้เอกสารนี้ `firestore.rules` และทุกส่วนที่เชื่อมต่อในงานเดียวกัน
 
-อัปเดตล่าสุด: 25 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
+อัปเดตล่าสุด: 24 ต.ค. 2026 (ผู้รับผิดชอบ: คนที่ 2 — Firebase & Data)
 
 ---
 
@@ -16,6 +16,9 @@
 | `lib/models/mood_entry.dart` | รูปแบบหนึ่งรายการบันทึก | ของกลาง |
 | `lib/repositories/diary_repository.dart` | interface อ่าน/เขียนบันทึก | คนที่ 2 + คนที่ 1 ตกลงร่วมกัน |
 | `lib/repositories/firestore_diary_repository.dart` | ตัวจริง (Cloud Firestore) | คนที่ 2 |
+| `lib/repositories/synced_diary_repository.dart` | ตัวที่แอปใช้จริง: เขียนลง Local DB (Hive) ก่อน แล้วซิงก์ขึ้น Firestore | คนที่ 2 |
+| `lib/repositories/hive_diary_store.dart`, `local_diary_store.dart` | Local database (Hive CE) และ interface | คนที่ 2 |
+| `lib/repositories/remote_diary_source.dart` | interface ฝั่งเซิร์ฟเวอร์ที่ซิงก์ใช้ (FirestoreDiaryRepository implement) | คนที่ 2 |
 | `lib/repositories/mock_diary_repository.dart` | ตัวจำลองในหน่วยความจำ + ข้อมูลตัวอย่าง | คนที่ 2 |
 | `lib/features/auth/auth_service.dart` | interface บัญชีผู้ใช้ + `AuthException` | คนที่ 2 + คนที่ 1 ตกลงร่วมกัน |
 | `lib/features/auth/firebase_auth_service.dart` | ตัวจริง (Firebase Authentication) | คนที่ 2 |
@@ -82,10 +85,8 @@ abstract class AuthService {
   String? get currentUserId;                 // null = ยังไม่ login
   Stream<String?> get userIdChanges;         // UID หรือ null เมื่อ logout
   String? get currentDisplayName;            // ชื่อที่แสดง null = ยังไม่ตั้ง (UI ใช้ชื่อเริ่มต้นเอง)
-  DateTime? get currentUserCreatedAt;        // วันสร้างบัญชี; null = ไม่มี metadata
   Future<void> signUp({required String email, required String password});
   Future<void> signIn({required String email, required String password});
-  Future<void> sendPasswordResetEmail({required String email});
   Future<void> signOut();
   Future<void> updateDisplayName(String name);   // ตัดช่องว่างหัวท้าย ไม่ว่าง ไม่เกิน 50 ตัวอักษร
 }
@@ -93,9 +94,7 @@ abstract class AuthService {
 
 - วิธีเข้าสู่ระบบ: **Email/Password เท่านั้น** ไม่มีชื่อผู้ใช้ รหัสผ่านอย่างน้อย 6 ตัวอักษร (ข้อกำหนดของ Firebase)
 - `signUp` สำเร็จแล้ว login ให้ทันที
-- `sendPasswordResetEmail` ส่งลิงก์รีเซ็ตรหัสผ่านผ่าน Firebase Authentication
 - **ชื่อที่แสดง** เก็บกับบัญชีใน Firebase Authentication (`displayName`) ไม่ใช่ใน Firestore จึงไม่แตะ Security Rules ตามเข้าเครื่องอื่นเมื่อ login บัญชีเดิม ถ้ายังไม่ตั้ง `currentDisplayName` เป็น `null` และ UI ใช้ชื่อเริ่มต้นเอง ข้อมูลโปรไฟล์อื่นนอกจากชื่อยังไม่มีที่เก็บ
-- `currentUserCreatedAt` อ่านวันสร้างบัญชีจาก Firebase Auth metadata; หน้า Home แสดงวันในปฏิทินย้อนหลังไม่เกิน 30 วัน และไม่แสดงวันก่อนวันที่สมัคร
 - ข้อผิดพลาดทั้งหมดเป็น `AuthException(code, message)` โดย `message` เป็นภาษาไทยพร้อมแสดงบน UI
 
 | `code` | ความหมาย |
@@ -124,11 +123,7 @@ Future<void> main() async {
 }
 ```
 
-หน้าจอรับ `AppDependencies` (`auth`, `diary`, `reflection`) แล้วเรียกผ่าน interface ระหว่างพัฒนา UI ใช้ `MockDiaryRepository(sampleUserId: 'mock-user')` แทนได้ที่จุดนี้จุดเดียว
-
-`GeminiReflectionService` ใช้ `GEMINI_API_KEY` จาก compile-time environment สำหรับทั้งการสะท้อนบันทึกและสรุปสถิติ โดยหน้าสถิติส่งเฉพาะจำนวนรวม อารมณ์/บริบทที่นับแล้ว และช่วงวันที่ให้ Gemini ไม่ส่งเนื้อหา diary; สรุปจะสร้างอัตโนมัติเมื่อข้อมูลช่วงนั้นโหลดเสร็จหรือเมื่อเปลี่ยนช่วงเวลา หาก key หรือ API ใช้ไม่ได้จะแสดงข้อผิดพลาดและให้ลองใหม่ ส่วนการสะท้อนบันทึกยังใช้ fallback ที่มีอยู่ใน service ได้ ห้าม commit API key และไม่ควรฝังคีย์ Gemini ในแอปที่เผยแพร่จริงเพราะดึงจาก binary ได้
-
-ก่อนส่ง diary ไปยัง Gemini UI ต้องแจ้งผู้ใช้และให้ผู้ใช้ยืนยันก่อน เนื่องจากบันทึกเป็นข้อมูลส่วนตัว; สรุปสถิติใช้ข้อมูล aggregate โดยไม่ส่ง diary text
+หน้าจอรับ `AppDependencies` (`auth`, `diary`) แล้วเรียกผ่าน interface ระหว่างพัฒนา UI ใช้ `MockDiaryRepository(sampleUserId: 'mock-user')` แทนได้ที่จุดนี้จุดเดียว
 
 ## 7. โครงสร้างบน Cloud Firestore
 
@@ -162,10 +157,9 @@ Future<void> main() async {
 
 ## 8. สถานะการทดสอบ
 
-ทดสอบบน Android emulator (API 34) กับ Firebase จริง ด้วยสคริปต์ชั่วคราว (`lib/dev/firebase_smoke_main.dart`) รอบล่าสุดเมื่อ 25 ต.ค. 2026 ผ่าน 32 จาก 32 เคส:
+ทดสอบบน Android emulator (API 34) กับ Firebase จริง เมื่อ 24 ต.ค. 2026 ด้วยสคริปต์ชั่วคราว ผ่าน 25 จาก 25 เคส:
 
 - **AuthService:** สมัคร, อีเมลซ้ำ, รหัสผิด, รหัสสั้น, login
-- **Display name:** ยังไม่ตั้ง → `null`, ตัดช่องว่างหัวท้าย, คงอยู่หลัง logout/login, ชื่อว่าง และชื่อเกิน 50 → `invalid-display-name`, ยังไม่ login → `not-signed-in`
 - **FirestoreDiaryRepository:** สร้าง/อ่าน/แก้/ลบ, ช่วงเวลา `[from, to)`, diary ว่าง, เรียงใหม่สุดก่อน, แก้รายการที่ไม่มี → `StateError`
 - **Rules ปฏิเสธข้อมูลผิดรูปแบบ:** mood/tag นอกรายการ, field เกิน, `userId` ไม่ตรง, diary เกินเพดาน (ทดสอบด้วยอักษรอังกฤษ), แก้ `createdAt`
 - **Rules ข้ามบัญชี:** ผู้ใช้ B อ่าน/เขียน/แก้/ลบของ A ไม่ได้ แต่ใช้ของตัวเองได้
@@ -178,7 +172,6 @@ Future<void> main() async {
 
 - **API key ของ Firebase** ใน `google-services.json` และ `lib/firebase_options.dart` ไม่ใช่ความลับระดับ admin (ข้อมูลปกป้องด้วย Security Rules) และถูกจำกัดเหลือ 3 API: Cloud Firestore, Identity Toolkit, Token Service **ถ้าเพิ่มบริการ Firebase/Google อื่น ต้องเพิ่ม API ในข้อจำกัดของคีย์ด้วย** ไม่เช่นนั้นจะถูกบล็อก
 - **ห้าม commit:** service account, `.env` ที่มีค่าจริง, Gemini API key (ควรเป็นคีย์แยกจากคีย์ Firebase)
-- **Gemini API key** ส่งผ่าน `--dart-define=GEMINI_API_KEY=...` ตอนรัน ไม่อยู่ในไฟล์ แต่ค่านี้ถูกคอมไพล์รวมใน APK และดึงออกได้ ใช้ได้เฉพาะช่วงพัฒนาและเดโมในทีม ถ้าแจก APK ให้คนนอกทีมทดสอบ ต้องตั้งโควตา/จำกัดคีย์ หรือเปลี่ยนวิธีก่อน
 - **ห้าม log** `diaryText`, อีเมล, รหัสผ่าน, token
 - แก้ Rules: แก้ `firestore.rules` แล้ว `firebase deploy --only firestore:rules --project moodmate-15d92` และทดสอบก่อนเสมอ
 - ข้อมูลตอนพัฒนาใช้ Firebase project เดียวกันทั้งทีม แต่ละคนใช้บัญชีทดสอบของตัวเอง ข้อมูลแยกตาม UID
@@ -194,9 +187,9 @@ Future<void> main() async {
 | การเรียงรายการ | ใหม่สุดก่อน |
 | ช่วงเวลา `getEntries` | `[from, to)` |
 | ที่เก็บชื่อผู้ใช้ | Firebase Authentication `displayName` (ไม่ใช้ Firestore) |
-| พฤติกรรมออฟไลน์ | ใช้แคชในตัว Firestore (ยังไม่ได้ทดสอบ ดูหัวข้อ 12.1) |
+| พฤติกรรมออฟไลน์ | ใช้ได้เต็มที่: เขียน/อ่านจาก Local DB แล้วซิงก์ขึ้น Firestore เมื่อออนไลน์ (หัวข้อ 12.1) |
 | ช่วงเวลาของ Dashboard | 7 วันย้อนหลังจากวันนี้ ใช้เวลาของเครื่อง (รายละเอียดเป็นข้อเสนอ ดูหัวข้อ 12.2) |
-| Local database | ไม่ใช้ (ไม่ใช้ Hive/Isar/SQLite) ใช้เฉพาะแคชในตัว Firestore ดูหัวข้อ 12.3 |
+| Local database | **Hive (แพ็กเกจ hive_ce)** เพราะเกณฑ์ประเมินต้องมีทั้ง Local DB และ Firestore (หัวข้อ 12.3) |
 
 ## 11. ข้อที่ทีมยังต้องตัดสิน
 
@@ -212,13 +205,17 @@ Future<void> main() async {
 
 ## 12. รายละเอียดของข้อที่ตัดสินใหม่
 
-### 12.1 ออฟไลน์: ใช้แคชในตัว Firestore
+### 12.1 ออฟไลน์: Local DB + ซิงก์ (SyncedDiaryRepository)
 
-Firestore บน Android เปิดแคชในเครื่องเป็นค่าเริ่มต้น ผู้ใช้อาจเปิดดูข้อมูลเก่าได้ตอนไม่มีเน็ต และคำสั่งเขียนจะถูกคิวไว้ส่งเมื่อกลับมาออนไลน์ **ทีมยังไม่เคยทดสอบพฤติกรรมนี้** ข้อควรระวังที่ต้องออกแบบก่อนถือว่ารองรับออฟไลน์:
+`AppDependencies.firebase()` ใช้ `SyncedDiaryRepository(local: HiveDiaryStore(), remote: FirestoreDiaryRepository())` ซึ่งยังเป็น `DiaryRepository` ตัวเดิม หน้าจอไม่ต้องแก้
 
-- `createEntry`, `updateEntry`, `deleteEntry` รอจนเซิร์ฟเวอร์ตอบรับ ถ้าออฟไลน์ `Future` จะค้างจนกลับมาออนไลน์ หน้า loading ของ UI อาจหมุนไม่หยุด
-- ถ้าเขียนตอนออฟไลน์แล้วภายหลัง Rules ปฏิเสธ ผู้ใช้จะไม่เห็นข้อผิดพลาดตอนกดบันทึก
-- งานที่ต้องทำ: ทดสอบด้วยโหมดเครื่องบิน แล้วตัดสินรูปแบบ UI (เช่น แสดง "บันทึกแล้ว รอซิงก์" หรือกำหนด timeout) และอาจปรับ `FirestoreDiaryRepository`
+- **เขียน** (`createEntry`/`updateEntry`/`deleteEntry`): บันทึกลง Hive ทันที (ใช้ได้ตอนไม่มีเน็ต) แล้วส่งขึ้น Firestore เบื้องหลัง รายการที่ยังไม่ส่งมีสถานะ `pending` (ลบ = `deleted` ซ่อนจากหน้าจอ รอลบบนคลาวด์)
+- **อ่าน** (`getEntries`): อ่านจาก Hive เสมอ ไม่รอเครือข่าย เครื่องที่ยังไม่มีข้อมูลเลย (ผู้ใช้ login เครื่องใหม่) จะรอดึงจาก Firestore ครั้งแรกไม่เกิน 8 วินาที
+- **ซิงก์**: ส่งรายการค้างขึ้นก่อน แล้วดึงข้อมูลจาก Firestore ลงเครื่อง Firestore เป็นแหล่งความจริง ยกเว้นรายการที่แก้ในเครื่องและยังไม่ส่ง (ชนะ) รายการที่ถูกลบจากเครื่องอื่นจะหายจากเครื่องนี้
+- **ตัวกระตุ้นการซิงก์:** หลังเขียน, ตอน `getEntries` (ถ้าข้อมูลเก่าเกิน 30 วินาที หรือยังมีรายการค้าง), และเรียก `syncNow(userId)` เอง ยังไม่มีตัวฟังสถานะเครือข่าย ถ้ากลับมาออนไลน์ จะซิงก์ในครั้งถัดไปที่มีการกระตุ้น (เช่น เปิดหน้า Home หรือบันทึกรายการ)
+- **เซิร์ฟเวอร์ปฏิเสธ** (เช่น ค่า `mood` นอกรายการ ผิด Rules): รายการนั้นเป็น `rejected` ไม่บล็อกรายการอื่น และยังแสดงในเครื่อง ต้องแก้ค่าให้ถูกจึงจะซิงก์ได้ (ลองใหม่อีกครั้งในรอบแอปถัดไป)
+- `SyncedDiaryRepository.changes` (Stream) ส่งสัญญาณเมื่อซิงก์ดึงข้อมูลใหม่ลงเครื่อง และ `pendingCount(userId)` บอกจำนวนรายการที่รอซิงก์ ทั้งสองเป็นของเสริม หน้าจอเลือกใช้ได้ (ต้อง cast เป็น `SyncedDiaryRepository`)
+- ข้อจำกัด: ถ้าผู้ใช้ล้างข้อมูลแอปหรือถอนการติดตั้งก่อนซิงก์ รายการที่ค้างหายได้ ข้อมูลใน Hive ไม่ได้เข้ารหัส (อยู่ในพื้นที่ส่วนตัวของแอป) และหลัง logout ข้อมูลของผู้ใช้เดิมยังอยู่ในเครื่อง แต่แยกตาม `userId` ผู้ใช้คนอื่นไม่เห็น
 
 ### 12.2 Dashboard: 7 วันย้อนหลังจากวันนี้ (ข้อเสนอ รอทีมยืนยัน)
 
@@ -237,11 +234,6 @@ final insight = WeeklyInsightCalculator().calculate(
 - หน้าจอควรใช้คำว่า "7 วันล่าสุด" ไม่ใช่ "สัปดาห์นี้"
 - ถ้าข้อมูลน้อย แสดงสถานะ "ข้อมูลไม่เพียงพอ" ตามที่เอกสารกลางกำหนด
 
-### 12.3 Local database: ไม่ใช้
+### 12.3 Local database: Hive (hive_ce)
 
-ทีมตัดสินไม่ใช้ Hive, Isar หรือ SQLite เพราะแคชในตัว Firestore ทำหน้าที่เก็บข้อมูลไว้ในเครื่องอยู่แล้ว ผลที่ตามมา:
-
-- ไม่เพิ่ม dependency และไม่ต้องออกแบบ sync/merge เอง
-- `MOODMATE_PROJECT_CONTEXT.md` ระบุ Hive/Isar/SQLite เป็น **ตัวเลือก** ที่ยังไม่ตัดสิน ข้อนี้จึงเป็นการเลือกตัวเลือกหนึ่ง ถ้ารายวิชาหรือผู้ตรวจงานกำหนดให้ต้องมี Local database ให้กลับมาทบทวน
-- ข้อมูลที่ยังไม่ถูกส่งขึ้นเซิร์ฟเวอร์ (ตอนออฟไลน์) อยู่ในแคชของ Firestore เท่านั้น ถ้าผู้ใช้ล้างข้อมูลแอปหรือถอนการติดตั้งก่อนซิงก์ ข้อมูลนั้นหายได้
-- ร่าง Diary ที่ยังไม่กดบันทึก ไม่ถูกเก็บถาวร (ปิดแอปแล้วหาย) ถ้าต้องการ ค่อยตัดสินใหม่เป็นฟีเจอร์แยก
+ทีมเลือก Hive เพราะเกณฑ์ประเมินกำหนดให้ต้องมีทั้ง Local database และ Firestore ใช้แพ็กเกจ `hive_ce` กับ `hive_ce_flutter` (ฟอร์กที่ยังได้รับการดูแล แทน `hive` ตัวเดิมที่เลิกพัฒนา) เก็บเป็น JSON string ในกล่องเดียว key = `userId|entryId` ไม่ใช้ code generation เวลาเก็บเป็นไมโครวินาทีเพื่อให้ตรงกับ Timestamp ของ Firestore (Rules ห้ามเปลี่ยน `createdAt`)
