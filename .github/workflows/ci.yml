@@ -1,0 +1,150 @@
+name: CI
+
+# รันอัตโนมัติเมื่อ push เข้า main หรือ branch feature/** และเมื่อเปิด PR เข้า main
+# กดรันเองได้จากแท็บ Actions (workflow_dispatch) เหมาะสำหรับสาธิตวันนำเสนอ
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# ถ้า push ซ้ำใน branch เดิมขณะรันอยู่ ให้ยกเลิกรอบเก่า ประหยัดเวลาและโควตา
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ใช้เวอร์ชันเดียวกับเครื่องที่พัฒนา (flutter doctor: 3.44.4 stable)
+  FLUTTER_VERSION: '3.44.4'
+  JAVA_VERSION: '17'
+
+jobs:
+  # ---------- Job 1: ตรวจโค้ดและทดสอบ ----------
+  test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # เกณฑ์ Coverage ขั้นต่ำ (ตามเกณฑ์ประเมินส่วนที่ 5)
+      COVERAGE_MIN: '70'
+      # false = แสดงเปอร์เซ็นต์และเตือนอย่างเดียว ไม่ทำให้ workflow แดง
+      # เปลี่ยนเป็น 'true' เมื่อทีมทำ Coverage ถึงเกณฑ์แล้ว
+      ENFORCE_COVERAGE: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # ถ้า pubspec.yaml ลงทะเบียน .env เป็น asset แต่ไฟล์จริงไม่ถูก commit
+      # (ถูกต้องแล้ว เพราะห้าม commit ความลับ) ให้สร้างจาก .env.example แทน
+      - name: Prepare .env for CI
+        run: |
+          if [ -f .env.example ] && [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests with coverage
+        run: flutter test --coverage
+
+      - name: Check coverage
+        run: |
+          # ไม่นับไฟล์ที่เครื่องมือสร้างให้ (firebase_options, *.g.dart, *.freezed.dart)
+          PCT=$(awk '
+            /^SF:/ {
+              f = substr($0, 4)
+              skip = (f ~ /firebase_options\.dart$/ || f ~ /\.g\.dart$/ || f ~ /\.freezed\.dart$/)
+            }
+            /^LF:/ { if (!skip) total += substr($0, 4) }
+            /^LH:/ { if (!skip) hit += substr($0, 4) }
+            END {
+              if (total == 0) { print "no coverage data" > "/dev/stderr"; exit 2 }
+              printf "%.1f", hit * 100 / total
+            }
+          ' coverage/lcov.info)
+
+          echo "Line coverage: ${PCT}% (minimum ${COVERAGE_MIN}%)"
+          {
+            echo "### Test coverage"
+            echo ""
+            echo "- Line coverage: **${PCT}%**"
+            echo "- Minimum: ${COVERAGE_MIN}%"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if awk -v p="$PCT" -v m="$COVERAGE_MIN" 'BEGIN { exit (p + 0 >= m + 0) ? 0 : 1 }'; then
+            echo "Coverage meets the minimum."
+          elif [ "$ENFORCE_COVERAGE" = "true" ]; then
+            echo "::error::Coverage ${PCT}% is below ${COVERAGE_MIN}%"
+            exit 1
+          else
+            echo "::warning::Coverage ${PCT}% is below ${COVERAGE_MIN}% (not enforced yet)"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------- Job 2: Build แอป Android ----------
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Prepare .env for CI
+        run: |
+          if [ -f .env.example ] && [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # debug build ไม่ต้องใช้ keystore จึงไม่มีความลับใน CI
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: moodmate-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+
+          
